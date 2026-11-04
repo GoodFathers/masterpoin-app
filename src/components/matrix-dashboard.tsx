@@ -480,6 +480,9 @@ export function MatrixDashboard({
               <span className="rounded-full bg-purple-100 text-purple-800 px-2.5 py-0.5 text-[10px] font-bold tracking-wide">
                 masterpoin.online
               </span>
+              <span className="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[10px] font-bold tracking-wide">
+                UI Rev 3 • Label Ringkas
+              </span>
             </div>
             <p className="mt-0.5 text-xs text-purple-900/80 leading-relaxed max-w-2xl">
               Tiap Phase kini <b>dipisahkan secara jelas dan spesifik</b> (Phase 1: 2 Level, Phase 2: 17 Level, Phase 3: 17 Level) dengan rincian bonus per level, kualifikasi, dan integrasi pendaftaran.
@@ -528,7 +531,7 @@ export function MatrixDashboard({
         </div>
 
         <div className="card p-4 transition hover:border-emerald-200">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Bonus Sponsor & Spillover</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sponsor & Spillover</p>
           <p className="mt-1 text-lg font-extrabold text-emerald-600">
             {formatRupiah(stats.totalBonusSponsorSpillover)}
           </p>
@@ -691,7 +694,7 @@ export function MatrixDashboard({
                   <p className="text-sm font-extrabold text-master-900">{phaseTiers.length} Level</p>
                 </div>
                 <div className="rounded-xl border border-rose-100 bg-white px-3 py-2 text-center shadow-xs">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Total Potensi Bonus Level</p>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Total Potensi Level Up</p>
                   <p className="text-sm font-extrabold text-emerald-700">{formatRupiah(phaseTotalPotential)}</p>
                 </div>
               </div>
@@ -704,15 +707,15 @@ export function MatrixDashboard({
               <thead>
                 <tr className="border-b border-rose-100 bg-rose-50/60 text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
                   <th className="p-3.5">Level</th>
-                  <th className="p-3.5">Tingkat Jabatan</th>
-                  <th className="p-3.5">Jumlah User (Kapasitas)</th>
-                  <th className="p-3.5">Bonus Sponsor</th>
-                  <th className="p-3.5">Bonus Spillover</th>
-                  <th className="p-3.5">Bonus Level</th>
-                  <th className="p-3.5">Total Bonus / Level</th>
-                  <th className="p-3.5">Reward / Hadiah Fisik</th>
-                  <th className="p-3.5">Pengali Check-In</th>
-                  <th className="p-3.5">Poin Rutinitas</th>
+                  <th className="p-3.5">Jabatan</th>
+                  <th className="p-3.5">User</th>
+                  <th className="p-3.5">Sponsor</th>
+                  <th className="p-3.5">Spillover</th>
+                  <th className="p-3.5">Level Up</th>
+                  <th className="p-3.5">Total</th>
+                  <th className="p-3.5">Reward</th>
+                  <th className="p-3.5">Check-In</th>
+                  <th className="p-3.5">Rutinitas</th>
                   <th className="p-3.5 text-right">Kontrol</th>
                 </tr>
               </thead>
@@ -944,7 +947,7 @@ export function MatrixDashboard({
                             setAssignLevelChoice(item.phase1?.level ?? 1);
                           }}
                           className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-bold text-master-800 shadow-xs hover:bg-rose-50"
-                          title="Tetapkan Tingkat Jabatan"
+                          title="Tetapkan Jabatan"
                         >
                           <UserCheck className="h-3.5 w-3.5 text-master-600" />
                           Tingkat
@@ -1178,7 +1181,7 @@ export function MatrixDashboard({
       >
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <label className="label">Nama Tingkat Jabatan</label>
+            <label className="label">Nama Jabatan</label>
             <input
               type="text"
               className="input font-bold"
@@ -1187,7 +1190,7 @@ export function MatrixDashboard({
             />
           </div>
           <div>
-            <label className="label">Target Jumlah User</label>
+            <label className="label">User (Kapasitas)</label>
             <input
               type="number"
               className="input font-bold"
@@ -1196,7 +1199,7 @@ export function MatrixDashboard({
             />
           </div>
           <div>
-            <label className="label">Bonus Sponsor (Rp)</label>
+            <label className="label">Sponsor (Rp)</label>
             <input
               type="number"
               className="input font-bold text-emerald-700"
@@ -1206,7 +1209,7 @@ export function MatrixDashboard({
           </div>
 
           <div>
-            <label className="label">Bonus Spillover (Rp)</label>
+            <label className="label">Spillover (Rp)</label>
             <input
               type="number"
               className="input font-bold text-sky-700"
@@ -1215,7 +1218,7 @@ export function MatrixDashboard({
             />
           </div>
           <div>
-            <label className="label">Bonus Capai Level (Rp)</label>
+            <label className="label">Level Up (Rp)</label>
             <input
               type="number"
               className="input font-bold text-purple-700"
@@ -1234,7 +1237,7 @@ export function MatrixDashboard({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="label">Nama Hadiah / Reward</label>
+            <label className="label">Nama Reward</label>
             <input
               type="text"
               className="input"
@@ -1244,7 +1247,7 @@ export function MatrixDashboard({
             />
           </div>
           <div>
-            <label className="label">Pengali Check-In (%)</label>
+            <label className="label">Check-In (%)</label>
             <input
               type="number"
               className="input font-bold text-amber-700"
@@ -1254,7 +1257,7 @@ export function MatrixDashboard({
           </div>
 
           <div>
-            <label className="label">Tambahan Poin Rutinitas</label>
+            <label className="label">Rutinitas (Poin)</label>
             <input
               type="number"
               className="input font-bold text-emerald-600"
