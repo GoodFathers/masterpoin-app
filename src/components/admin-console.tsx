@@ -26,6 +26,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { MatrixDashboard } from "./matrix-dashboard";
+import { ResetPanel } from "./reset-panel";
 import { EmptyState, Modal, Spinner, StatusBadge, Toast } from "@/components/ui";
 import { formatDateTimeWib, formatNumber, formatRupiah } from "@/lib/time";
 import { ROLE_BADGE_STYLE, ROLE_LABELS, canManagePoints, isSuperAdmin } from "@/lib/roles";
@@ -118,7 +119,7 @@ export function AdminConsole({
   const canEdit = canManagePoints(currentUser);
 
   // Default tab based on permissions
-  const [activeTab, setActiveTab] = useState<"requests" | "users" | "points" | "matrix">(
+  const [activeTab, setActiveTab] = useState<"requests" | "users" | "points" | "matrix" | "reset">(
     isSuper ? "matrix" : canEdit ? "points" : "requests",
   );
 
@@ -550,6 +551,20 @@ export function AdminConsole({
               Hak Akses & Penunjukan ({usersList.length})
             </button>
           )}
+
+          {isSuper && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("reset")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+                activeTab === "reset" ? "bg-master-600 text-white" : "text-slate-600 hover:text-master-800",
+              )}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset Sistem
+            </button>
+          )}
         </div>
       </div>
 
@@ -579,6 +594,9 @@ export function AdminConsole({
       {activeTab === "matrix" && (
         <MatrixDashboard currentUserRole={currentUser.role} />
       )}
+
+      {/* TAB RESET SISTEM (Super Admin saja) */}
+      {activeTab === "reset" && isSuper && <ResetPanel />}
 
       {/* TAB 1: VERIFIKASI QRIS */}
       {activeTab === "requests" && (
