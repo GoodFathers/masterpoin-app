@@ -143,13 +143,51 @@ export type MatrixMission = {
   isActive: boolean;
 };
 
+const PHASE_HEADER_INFO: Record<
+  number,
+  {
+    badge: string;
+    title: string;
+    subtitle: string;
+    matrixType: string;
+    levels: string;
+    color: string;
+  }
+> = {
+  1: {
+    badge: "Phase 1: Training Matrix",
+    title: "Phase 1 — Decimal Matrix 10-Spillover",
+    subtitle: "2 Tingkat: Training 1 (10 User) & Training 2 (100 User). Setiap upline menampung maksimal 10 anggota langsung sebelum melimpah (spillover) ke bawahnya.",
+    matrixType: "10-Wide Decimal Spillover",
+    levels: "2 Level (10 s.d. 100 User)",
+    color: "sky",
+  },
+  2: {
+    badge: "Phase 2: Karir Hybrid (Magang ➔ Supervisor)",
+    title: "Phase 2 — Binary Matrix 2-Spillover (17 Level)",
+    subtitle: "17 Tingkat: Mulai dari Magang 1 (2 User), Magang 2–4, Juniar Staf 1–12, Staf 1–4, Senior Staf 1–2, Tim Leader 1–4, hingga Supervisor (131.072 User).",
+    matrixType: "2-Wide Binary Spillover",
+    levels: "17 Level (2 s.d. 131.072 User)",
+    color: "emerald",
+  },
+  3: {
+    badge: "Phase 3: Eksekutif (Manager ➔ Komisaris)",
+    title: "Phase 3 — Executive Binary Matrix (17 Level)",
+    subtitle: "17 Tingkat Eksekutif: Mulai dari Manager 1 (2 User), Manager 2–4, Senior Manager 1–2, Kepala Bagian 1–4, Director 1–2, President Director 1–4, hingga Komisaris (131.072 User).",
+    matrixType: "2-Wide Executive Binary",
+    levels: "17 Level (2 s.d. 131.072 User)",
+    color: "purple",
+  },
+};
+
 export function MatrixDashboard({
   currentUserRole,
 }: {
   currentUserRole: string;
 }) {
   const [activeSubTab, setActiveSubTab] = useState<"tiers" | "members" | "tree" | "missions">("tiers");
-  const [tierFilter, setTierFilter] = useState<"hybrid" | "all" | "phase3">("hybrid");
+  // Default selectedPhase = 1; Masing-masing Phase dipisahkan jelas dengan tab sendiri
+  const [selectedPhase, setSelectedPhase] = useState<1 | 2 | 3>(1);
   const [treePhase, setTreePhase] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -185,7 +223,7 @@ export function MatrixDashboard({
 
   // Modal: Manual Assign Level for Member
   const [assignUserTarget, setAssignUserTarget] = useState<UnifiedMatrixUser | null>(null);
-  const [assignPhaseChoice, setAssignPhaseChoice] = useState<number>(2);
+  const [assignPhaseChoice, setAssignPhaseChoice] = useState<number>(1);
   const [assignLevelChoice, setAssignLevelChoice] = useState<number>(1);
   const [savingAssign, setSavingAssign] = useState(false);
 
@@ -194,7 +232,7 @@ export function MatrixDashboard({
   const [awardBonusAmount, setAwardBonusAmount] = useState<string>("100000");
   const [awardBonusType, setAwardBonusType] = useState<string>("Bonus Prestasi Matrix");
   const [awardBonusNote, setAwardBonusNote] = useState<string>("Kualifikasi kinerjanya di jaringan hybrid");
-  const [awardBonusPhase, setAwardBonusPhase] = useState<number>(2);
+  const [awardBonusPhase, setAwardBonusPhase] = useState<number>(1);
   const [savingAward, setSavingAward] = useState(false);
 
   // Modal: Qualify to Phase 3
@@ -243,19 +281,15 @@ export function MatrixDashboard({
     fetchMatrixData(treePhase);
   }, [treePhase]);
 
-  // Display tiers according to filter:
-  // "hybrid" -> Phase 1 & Phase 2 BERSAMAAN (JANGAN DIPISAH!)
-  // "all" -> Phase 1, Phase 2, & Phase 3 Sekaligus
-  // "phase3" -> Phase 3 Eksekutif saja
-  const displayTiers = useMemo(() => {
-    if (tierFilter === "hybrid") {
-      return tiers.filter((t) => t.phase === 1 || t.phase === 2);
-    }
-    if (tierFilter === "phase3") {
-      return tiers.filter((t) => t.phase === 3);
-    }
-    return tiers;
-  }, [tiers, tierFilter]);
+  // Pisahkan tiers secara murni per Phase:
+  const phaseTiers = useMemo(() => {
+    return tiers.filter((t) => t.phase === selectedPhase);
+  }, [tiers, selectedPhase]);
+
+  // Hitung total potensi bonus kumulatif untuk phase yang dipilih
+  const phaseTotalPotential = useMemo(() => {
+    return phaseTiers.reduce((acc, t) => acc + (t.bonusSponsor + t.bonusSpillover + t.bonusLevel), 0);
+  }, [phaseTiers]);
 
   // Filter unified members by query
   const filteredUnifiedUsers = useMemo(() => {
@@ -267,7 +301,8 @@ export function MatrixDashboard({
         item.user.email.toLowerCase().includes(q) ||
         (item.user.accessCode && item.user.accessCode.toLowerCase().includes(q)) ||
         (item.phase1 && item.phase1.tingkat.toLowerCase().includes(q)) ||
-        (item.phase2 && item.phase2.tingkat.toLowerCase().includes(q)),
+        (item.phase2 && item.phase2.tingkat.toLowerCase().includes(q)) ||
+        (item.phase3 && item.phase3.tingkat.toLowerCase().includes(q)),
     );
   }, [unifiedUsers, searchQuery]);
 
@@ -432,22 +467,22 @@ export function MatrixDashboard({
   return (
     <div className="space-y-5">
       {/* Top Banner Alert */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50 via-rose-50 to-white p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-purple-600 to-master-700 text-white font-bold text-sm shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-purple-200/90 bg-gradient-to-r from-purple-50 via-rose-50 to-white p-4.5 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-purple-600 to-master-700 text-white font-bold text-sm shadow-md">
             <Crown className="h-5 w-5" />
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-bold text-purple-950">
-                Hybrid Matrix Spillover 3 Phase & Kontrol Bonus
+              <p className="text-sm font-extrabold text-purple-950">
+                Hybrid Matrix Spillover 3 Phase — Panel Kontrol Presisi
               </p>
-              <span className="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-[10px] font-bold">
-                Domain: https://masterpoin.online
+              <span className="rounded-full bg-purple-100 text-purple-800 px-2.5 py-0.5 text-[10px] font-bold tracking-wide">
+                masterpoin.online
               </span>
             </div>
-            <p className="mt-0.5 text-[11px] text-purple-900/80 leading-relaxed">
-              Hak akses eksklusif Super Admin & Admin: Pengaturan bonus per level, integrasi otomatis registrasi, dan kualifikasi anggota.
+            <p className="mt-0.5 text-xs text-purple-900/80 leading-relaxed max-w-2xl">
+              Tiap Phase kini <b>dipisahkan secara jelas dan spesifik</b> (Phase 1: 2 Level, Phase 2: 17 Level, Phase 3: 17 Level) dengan rincian bonus per level, kualifikasi, dan integrasi pendaftaran.
             </p>
           </div>
         </div>
@@ -456,7 +491,7 @@ export function MatrixDashboard({
           type="button"
           onClick={() => fetchMatrixData(treePhase)}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-white px-3 py-1.5 text-xs font-bold text-purple-900 shadow-sm hover:bg-purple-50 active:scale-95 transition"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-white px-3.5 py-2 text-xs font-bold text-purple-900 shadow-sm hover:bg-purple-50 active:scale-95 transition"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin text-purple-600")} />
           Segarkan Data
@@ -465,63 +500,76 @@ export function MatrixDashboard({
 
       {/* Top Stats Overview */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div className="card p-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-master-500">Anggota Phase 1</p>
-          <p className="mt-0.5 text-xl font-extrabold text-slate-900">{stats.totalPhase1}</p>
-          <p className="text-[10px] text-slate-400">10-Spillover Decimal</p>
+        <div className="card p-4 transition hover:border-sky-200">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Anggota Phase 1</p>
+            <span className="h-2 w-2 rounded-full bg-sky-500" />
+          </div>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.totalPhase1}</p>
+          <p className="text-[10.5px] text-slate-500 font-medium">10-Spillover (Training 1–2)</p>
         </div>
-        <div className="card p-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-master-500">Anggota Phase 2</p>
-          <p className="mt-0.5 text-xl font-extrabold text-slate-900">{stats.totalPhase2}</p>
-          <p className="text-[10px] text-slate-400">2-Spillover Binary (17 Level)</p>
+
+        <div className="card p-4 transition hover:border-emerald-200">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Anggota Phase 2</p>
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          </div>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.totalPhase2}</p>
+          <p className="text-[10.5px] text-slate-500 font-medium">Binary 17 Level (Magang ➔ SPV)</p>
         </div>
-        <div className="card p-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-master-500">Anggota Phase 3</p>
-          <p className="mt-0.5 text-xl font-extrabold text-slate-900">{stats.totalPhase3}</p>
-          <p className="text-[10px] text-slate-400">Eksekutif Manager</p>
+
+        <div className="card p-4 transition hover:border-purple-200">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Anggota Phase 3</p>
+            <span className="h-2 w-2 rounded-full bg-purple-500" />
+          </div>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.totalPhase3}</p>
+          <p className="text-[10.5px] text-slate-500 font-medium">Eksekutif (Manager ➔ Komisaris)</p>
         </div>
-        <div className="card p-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-master-500">Bonus Sponsor & Spillover</p>
-          <p className="mt-0.5 text-base font-extrabold text-emerald-600">
+
+        <div className="card p-4 transition hover:border-emerald-200">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Bonus Sponsor & Spillover</p>
+          <p className="mt-1 text-lg font-extrabold text-emerald-600">
             {formatRupiah(stats.totalBonusSponsorSpillover)}
           </p>
-          <p className="text-[10px] text-slate-400">Akumulasi Saldo Bonus</p>
+          <p className="text-[10.5px] text-slate-400">Total Akumulasi Terhitung</p>
         </div>
-        <div className="col-span-2 sm:col-span-1 card p-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-master-500">Total Semua Bonus</p>
-          <p className="mt-0.5 text-base font-extrabold text-purple-600">{formatRupiah(stats.totalBonuses)}</p>
-          <p className="text-[10px] text-slate-400">Bonus Jaringan & Kualifikasi</p>
+
+        <div className="col-span-2 sm:col-span-1 card p-4 transition hover:border-purple-200">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Semua Bonus</p>
+          <p className="mt-1 text-lg font-extrabold text-purple-700">{formatRupiah(stats.totalBonuses)}</p>
+          <p className="text-[10.5px] text-slate-400">Sponsor, Spillover & Level</p>
         </div>
       </div>
 
       {/* Main Feature Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 pb-2">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setActiveSubTab("tiers")}
             className={cn(
-              "flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition",
+              "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition shadow-sm",
               activeSubTab === "tiers"
-                ? "bg-master-600 text-white shadow-sm"
+                ? "bg-master-600 text-white"
                 : "bg-white text-slate-600 border border-rose-100 hover:bg-rose-50",
             )}
           >
-            <Coins className="h-3.5 w-3.5" />
-            Tabel Bonus Jelas Per Level (Phase 1 & 2 Bersamaan)
+            <Coins className="h-4 w-4" />
+            Tabel Bonus Spesifik Per Phase (1, 2, & 3 Terpisah)
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab("members")}
             className={cn(
-              "flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition",
+              "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition shadow-sm",
               activeSubTab === "members"
-                ? "bg-master-600 text-white shadow-sm"
+                ? "bg-master-600 text-white"
                 : "bg-white text-slate-600 border border-rose-100 hover:bg-rose-50",
             )}
           >
-            <UserCog className="h-3.5 w-3.5" />
+            <UserCog className="h-4 w-4" />
             Kontrol Anggota & Salurkan Bonus ({unifiedUsers.length})
           </button>
 
@@ -529,13 +577,13 @@ export function MatrixDashboard({
             type="button"
             onClick={() => setActiveSubTab("tree")}
             className={cn(
-              "flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition",
+              "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition shadow-sm",
               activeSubTab === "tree"
-                ? "bg-master-600 text-white shadow-sm"
+                ? "bg-master-600 text-white"
                 : "bg-white text-slate-600 border border-rose-100 hover:bg-rose-50",
             )}
           >
-            <Network className="h-3.5 w-3.5" />
+            <Network className="h-4 w-4" />
             Visualizer Pohon Spillover
           </button>
 
@@ -543,156 +591,178 @@ export function MatrixDashboard({
             type="button"
             onClick={() => setActiveSubTab("missions")}
             className={cn(
-              "flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition",
+              "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition shadow-sm",
               activeSubTab === "missions"
-                ? "bg-master-600 text-white shadow-sm"
+                ? "bg-master-600 text-white"
                 : "bg-white text-slate-600 border border-rose-100 hover:bg-rose-50",
             )}
           >
-            <Trophy className="h-3.5 w-3.5" />
+            <Trophy className="h-4 w-4" />
             Misi & Tantangan Bonus ({missions.length})
           </button>
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* TAB 1: TABEL BONUS JELAS PER LEVEL (JANGAN DIPISAH PHASE 1 & 2) */}
+      {/* TAB 1: TABEL BONUS JELAS PER LEVEL (PHASE 1, 2, 3 TERPISAH)    */}
       {/* ============================================================== */}
       {activeSubTab === "tiers" && (
         <div className="space-y-4">
-          <div className="card p-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold text-slate-900">
-                Tabel Rincian Bonus Per Level — Alur Karir Hybrid
-              </p>
-              <p className="text-[11.5px] text-slate-500">
-                Phase 1 (Training 1–2) dan Phase 2 (Magang 1 s.d. Supervisor) ditampilkan secara berurutan tanpa dipisah, memperlihatkan bonus sponsor, bonus spillover, bonus level, dan reward dengan jelas.
-              </p>
-            </div>
+          {/* Phase Selector Tabs: Memisahkan Phase 1, Phase 2, dan Phase 3 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {[
+              {
+                phase: 1 as const,
+                title: "Phase 1: Training Matrix",
+                levelsText: "2 Level (Training 1 & 2)",
+                targetTotal: "Total Target: 110 User",
+                icon: Layers,
+                colorActive: "border-sky-500 bg-sky-50/80 text-sky-950",
+                colorBadge: "bg-sky-600 text-white",
+              },
+              {
+                phase: 2 as const,
+                title: "Phase 2: Karir Hybrid",
+                levelsText: "17 Level (Magang ➔ Supervisor)",
+                targetTotal: "Total Target: 131.072 User",
+                icon: Binary,
+                colorActive: "border-emerald-500 bg-emerald-50/80 text-emerald-950",
+                colorBadge: "bg-emerald-600 text-white",
+              },
+              {
+                phase: 3 as const,
+                title: "Phase 3: Eksekutif",
+                levelsText: "17 Level (Manager ➔ Komisaris)",
+                targetTotal: "Total Target: 131.072 User",
+                icon: Crown,
+                colorActive: "border-purple-500 bg-purple-50/80 text-purple-950",
+                colorBadge: "bg-purple-600 text-white",
+              },
+            ].map((p) => {
+              const Icon = p.icon;
+              const isSelected = selectedPhase === p.phase;
+              return (
+                <button
+                  key={p.phase}
+                  type="button"
+                  onClick={() => setSelectedPhase(p.phase)}
+                  className={cn(
+                    "flex flex-col text-left p-4 rounded-2xl border-2 transition active:scale-[0.99] shadow-sm",
+                    isSelected
+                      ? p.colorActive
+                      : "border-rose-100/90 bg-white hover:border-master-200 text-slate-700",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={cn("inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold", isSelected ? p.colorBadge : "bg-rose-50 text-master-800")}>
+                      <Icon className="h-3.5 w-3.5" />
+                      Phase {p.phase}
+                    </span>
+                    <span className="text-[11px] font-extrabold text-slate-400">
+                      {p.phase === 1 ? "10-Wide Decimal" : "2-Wide Binary"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm font-extrabold">{p.title}</p>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">{p.levelsText}</p>
+                  <p className="text-[10.5px] font-semibold text-slate-400 mt-1">{p.targetTotal}</p>
+                </button>
+              );
+            })}
+          </div>
 
-            {/* View Selector: Phase 1 & 2 Hybrid (Default) vs All vs Phase 3 */}
-            <div className="flex items-center gap-1 rounded-xl border border-rose-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setTierFilter("hybrid")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-bold transition",
-                  tierFilter === "hybrid"
-                    ? "bg-master-600 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900",
-                )}
-              >
-                Phase 1 & 2 (Gabungan Karir Hybrid)
-              </button>
-              <button
-                type="button"
-                onClick={() => setTierFilter("all")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-bold transition",
-                  tierFilter === "all"
-                    ? "bg-master-600 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900",
-                )}
-              >
-                Semua Phase (1, 2, & 3 Sekaligus)
-              </button>
-              <button
-                type="button"
-                onClick={() => setTierFilter("phase3")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-bold transition",
-                  tierFilter === "phase3"
-                    ? "bg-master-600 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900",
-                )}
-              >
-                Phase 3 (Eksekutif Manager ➔ Komisaris)
-              </button>
+          {/* Phase Header Info Card */}
+          <div className="card p-5 border-l-4 border-l-master-600 bg-gradient-to-r from-rose-50/40 via-white to-white">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <span className="inline-block font-extrabold text-[11px] uppercase tracking-wider text-master-700">
+                  {PHASE_HEADER_INFO[selectedPhase].badge}
+                </span>
+                <h2 className="mt-1 text-base font-extrabold text-slate-900">
+                  {PHASE_HEADER_INFO[selectedPhase].title}
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 leading-relaxed max-w-3xl">
+                  {PHASE_HEADER_INFO[selectedPhase].subtitle}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-xs">
+                <div className="rounded-xl border border-rose-100 bg-white px-3 py-2 text-center shadow-xs">
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Jumlah Tingkat</p>
+                  <p className="text-sm font-extrabold text-master-900">{phaseTiers.length} Level</p>
+                </div>
+                <div className="rounded-xl border border-rose-100 bg-white px-3 py-2 text-center shadow-xs">
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Total Potensi Bonus Level</p>
+                  <p className="text-sm font-extrabold text-emerald-700">{formatRupiah(phaseTotalPotential)}</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="card overflow-x-auto">
+          {/* Tabel Presisi Per Level Untuk Phase Yang Dipilih */}
+          <div className="card overflow-x-auto shadow-sm">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-rose-100 bg-rose-50/50 text-[10.5px] font-bold uppercase tracking-wider text-slate-700">
-                  <th className="p-3">Phase</th>
-                  <th className="p-3">Level</th>
-                  <th className="p-3">Tingkat Jabatan</th>
-                  <th className="p-3">Target Jaringan</th>
-                  <th className="p-3">Bonus Sponsor</th>
-                  <th className="p-3">Bonus Spillover</th>
-                  <th className="p-3">Bonus Level</th>
-                  <th className="p-3">Total Potensi Bonus</th>
-                  <th className="p-3">Reward / Hadiah</th>
-                  <th className="p-3">Pengali Check-In</th>
-                  <th className="p-3">Poin Rutinitas</th>
-                  <th className="p-3 text-right">Kontrol</th>
+                <tr className="border-b border-rose-100 bg-rose-50/60 text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  <th className="p-3.5">Level</th>
+                  <th className="p-3.5">Tingkat Jabatan</th>
+                  <th className="p-3.5">Jumlah User (Kapasitas)</th>
+                  <th className="p-3.5">Bonus Sponsor</th>
+                  <th className="p-3.5">Bonus Spillover</th>
+                  <th className="p-3.5">Bonus Level</th>
+                  <th className="p-3.5">Total Bonus / Level</th>
+                  <th className="p-3.5">Reward / Hadiah Fisik</th>
+                  <th className="p-3.5">Pengali Check-In</th>
+                  <th className="p-3.5">Poin Rutinitas</th>
+                  <th className="p-3.5 text-right">Kontrol</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-rose-50">
-                {displayTiers.map((tier) => {
+                {phaseTiers.map((tier) => {
                   const totalLevelBonus = tier.bonusSponsor + tier.bonusSpillover + tier.bonusLevel;
                   return (
                     <tr
                       key={tier.id}
-                      className={cn(
-                        "hover:bg-rose-50/30 transition",
-                        tier.phase === 1 && "bg-white",
-                        tier.phase === 2 && "bg-[#fffcfc]",
-                        tier.phase === 3 && "bg-purple-50/15",
-                      )}
+                      className="hover:bg-rose-50/40 transition group"
                     >
-                      <td className="p-3">
-                        <span
-                          className={cn(
-                            "rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase",
-                            tier.phase === 1
-                              ? "bg-sky-50 text-sky-700 border border-sky-200"
-                              : tier.phase === 2
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-purple-50 text-purple-700 border border-purple-200",
-                          )}
-                        >
-                          Phase {tier.phase}
+                      <td className="p-3.5 font-mono text-xs font-extrabold text-slate-900">
+                        {String(tier.level).padStart(2, "0")}.
+                      </td>
+                      <td className="p-3.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-3 py-1 font-extrabold text-xs text-master-950">
+                          {tier.tingkat}
                         </span>
                       </td>
-                      <td className="p-3 font-mono font-bold text-slate-900">
-                        {String(tier.level).padStart(2, "0")}
-                      </td>
-                      <td className="p-3 font-bold text-master-950">
-                        {tier.tingkat}
-                      </td>
-                      <td className="p-3 font-bold text-slate-800">
+                      <td className="p-3.5 font-extrabold text-slate-900">
                         {formatNumber(tier.userTarget)}{" "}
-                        <span className="text-[10px] text-slate-400 font-normal">user</span>
+                        <span className="text-[10px] text-slate-400 font-medium">user</span>
                       </td>
-                      <td className="p-3 font-semibold text-emerald-700">
+                      <td className="p-3.5 font-bold text-emerald-700">
                         {formatRupiah(tier.bonusSponsor)}
                       </td>
-                      <td className="p-3 font-semibold text-sky-700">
+                      <td className="p-3.5 font-bold text-sky-700">
                         {formatRupiah(tier.bonusSpillover)}
                       </td>
-                      <td className="p-3 font-bold text-purple-700">
+                      <td className="p-3.5 font-extrabold text-purple-700">
                         {formatRupiah(tier.bonusLevel)}
                       </td>
-                      <td className="p-3 font-extrabold text-slate-900">
+                      <td className="p-3.5 font-extrabold text-slate-950 bg-rose-50/20">
                         {formatRupiah(totalLevelBonus)}
                       </td>
-                      <td className="p-3 text-slate-800">
-                        <p className="font-semibold">{tier.rewardName ?? "-"}</p>
+                      <td className="p-3.5 text-slate-800">
+                        <p className="font-bold">{tier.rewardName ?? "-"}</p>
                         {tier.rewardValue > 0 && (
-                          <span className="text-[10px] text-slate-400 block">
-                            (Nilai: {formatRupiah(tier.rewardValue)})
+                          <span className="text-[10.5px] text-slate-500 block font-medium">
+                            Nilai: {formatRupiah(tier.rewardValue)}
                           </span>
                         )}
                       </td>
-                      <td className="p-3 font-bold text-amber-700">
+                      <td className="p-3.5 font-extrabold text-amber-700">
                         {tier.checkinMultiplier}%
                       </td>
-                      <td className="p-3 font-bold text-emerald-600">
+                      <td className="p-3.5 font-extrabold text-emerald-600">
                         +{tier.routinePointsBonus}
                       </td>
-                      <td className="p-3 text-right">
+                      <td className="p-3.5 text-right">
                         <button
                           type="button"
                           onClick={() => {
@@ -710,10 +780,10 @@ export function MatrixDashboard({
                               requirementNote: tier.requirementNote ?? "",
                             });
                           }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-bold text-master-800 shadow-sm hover:bg-rose-50 active:scale-95 transition"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-master-800 shadow-xs hover:bg-rose-50 active:scale-95 transition"
                         >
-                          <Edit className="h-3 w-3 text-master-600" />
-                          Edit
+                          <Edit className="h-3.5 w-3.5 text-master-600" />
+                          Edit Nilai
                         </button>
                       </td>
                     </tr>
@@ -733,10 +803,10 @@ export function MatrixDashboard({
           <div className="card p-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold text-slate-900">
-                Pusat Kontrol Anggota Hybrid (Phase 1 & Phase 2 Terkoneksi)
+                Pusat Kontrol Anggota Hybrid (Phase 1, 2, & 3)
               </p>
               <p className="text-[11.5px] text-slate-500">
-                Setiap anggota terdaftar otomatis di Phase 1 & 2. Di sini admin dapat menyalurkan bonus langsung, menetapkan tingkat jabatan, atau mempromosikan ke Phase 3.
+                Data anggota ditampilkan dengan pembagian posisi tiap Phase secara presisi. Salurkan bonus langsung atau tetapkan tingkat jabatan anggota.
               </p>
             </div>
             <div className="relative">
@@ -751,23 +821,23 @@ export function MatrixDashboard({
             </div>
           </div>
 
-          <div className="card overflow-x-auto">
+          <div className="card overflow-x-auto shadow-sm">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-rose-100 bg-rose-50/40 text-[10.5px] font-bold uppercase tracking-wider text-slate-600">
-                  <th className="p-3">Anggota</th>
-                  <th className="p-3">Nomor Akses</th>
-                  <th className="p-3">Phase 1 (Training)</th>
-                  <th className="p-3">Phase 2 (Karir)</th>
-                  <th className="p-3">Phase 3 (Eksekutif)</th>
-                  <th className="p-3">Total Bonus</th>
-                  <th className="p-3 text-right">Tindakan Kontrol</th>
+                <tr className="border-b border-rose-100 bg-rose-50/50 text-[10.5px] font-bold uppercase tracking-wider text-slate-600">
+                  <th className="p-3.5">Anggota</th>
+                  <th className="p-3.5">Nomor Akses</th>
+                  <th className="p-3.5">Phase 1 (Training)</th>
+                  <th className="p-3.5">Phase 2 (Karir Hybrid)</th>
+                  <th className="p-3.5">Phase 3 (Eksekutif)</th>
+                  <th className="p-3.5">Total Bonus</th>
+                  <th className="p-3.5 text-right">Tindakan Kontrol</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-rose-50">
                 {filteredUnifiedUsers.map((item) => (
                   <tr key={item.user.id} className="hover:bg-rose-50/30 transition">
-                    <td className="p-3">
+                    <td className="p-3.5">
                       <div className="flex items-center gap-2.5">
                         {item.user.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -788,9 +858,9 @@ export function MatrixDashboard({
                       </div>
                     </td>
 
-                    <td className="p-3">
+                    <td className="p-3.5">
                       {item.user.accessCode ? (
-                        <span className="font-mono text-xs font-bold text-master-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                        <span className="font-mono text-xs font-bold text-master-800 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200">
                           {item.user.accessCode}
                         </span>
                       ) : (
@@ -799,12 +869,12 @@ export function MatrixDashboard({
                     </td>
 
                     {/* Phase 1 */}
-                    <td className="p-3">
+                    <td className="p-3.5">
                       {item.phase1 ? (
                         <div>
                           <span className="font-bold text-sky-800">{item.phase1.tingkat}</span>
-                          <p className="text-[10px] text-slate-500">
-                            Downline: {item.phase1.directDownlines}/10 • Total: {item.phase1.totalDownlines}
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            Downline: {item.phase1.directDownlines}/10 • Jaringan: {item.phase1.totalDownlines}
                           </p>
                         </div>
                       ) : (
@@ -813,11 +883,11 @@ export function MatrixDashboard({
                     </td>
 
                     {/* Phase 2 */}
-                    <td className="p-3">
+                    <td className="p-3.5">
                       {item.phase2 ? (
                         <div>
                           <span className="font-bold text-emerald-800">{item.phase2.tingkat}</span>
-                          <p className="text-[10px] text-slate-500">
+                          <p className="text-[10px] text-slate-500 font-medium">
                             Kaki: {item.phase2.directDownlines}/2 • Jaringan: {item.phase2.totalDownlines}
                           </p>
                         </div>
@@ -827,11 +897,11 @@ export function MatrixDashboard({
                     </td>
 
                     {/* Phase 3 */}
-                    <td className="p-3">
+                    <td className="p-3.5">
                       {item.phase3 ? (
                         <div>
                           <span className="font-bold text-purple-800">{item.phase3.tingkat}</span>
-                          <span className="block text-[9.5px] text-purple-600 font-semibold">Terkualifikasi</span>
+                          <span className="block text-[10px] text-purple-600 font-semibold">Terkualifikasi</span>
                         </div>
                       ) : (
                         <span className="text-[10.5px] text-slate-400 italic">Belum Kualifikasi</span>
@@ -839,14 +909,14 @@ export function MatrixDashboard({
                     </td>
 
                     {/* Total Bonus */}
-                    <td className="p-3">
-                      <span className="font-mono font-extrabold text-emerald-700">
+                    <td className="p-3.5">
+                      <span className="font-mono font-extrabold text-emerald-700 text-xs">
                         {formatRupiah(item.totalBonus)}
                       </span>
                     </td>
 
                     {/* Actions */}
-                    <td className="p-3 text-right">
+                    <td className="p-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Award Bonus */}
                         <button
@@ -858,10 +928,10 @@ export function MatrixDashboard({
                             setAwardBonusNote("Pencairan bonus kinerja jaringan");
                             setAwardBonusPhase(2);
                           }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
-                          title="Salurkan Bonus Langsung ke Saldo"
+                          className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 active:scale-95 transition"
+                          title="Salurkan Bonus Langsung ke Saldo Akun"
                         >
-                          <Coins className="h-3 w-3" />
+                          <Coins className="h-3.5 w-3.5" />
                           Beri Bonus
                         </button>
 
@@ -870,13 +940,13 @@ export function MatrixDashboard({
                           type="button"
                           onClick={() => {
                             setAssignUserTarget(item);
-                            setAssignPhaseChoice(2);
-                            setAssignLevelChoice(item.phase2?.level ?? 1);
+                            setAssignPhaseChoice(1);
+                            setAssignLevelChoice(item.phase1?.level ?? 1);
                           }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-bold text-master-800 shadow-sm hover:bg-rose-50"
+                          className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-bold text-master-800 shadow-xs hover:bg-rose-50"
                           title="Tetapkan Tingkat Jabatan"
                         >
-                          <UserCheck className="h-3 w-3 text-master-600" />
+                          <UserCheck className="h-3.5 w-3.5 text-master-600" />
                           Tingkat
                         </button>
 
@@ -885,10 +955,10 @@ export function MatrixDashboard({
                           <button
                             type="button"
                             onClick={() => setQualifyUserTarget(item)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-2 py-1 text-[10.5px] font-bold text-white hover:bg-purple-700 shadow-sm"
+                            className="inline-flex items-center gap-1 rounded-xl bg-purple-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-purple-700 shadow-xs"
                             title="Promosikan ke Phase 3 Eksekutif"
                           >
-                            <Crown className="h-2.5 w-2.5" />
+                            <Crown className="h-3 w-3" />
                             ➔ P3
                           </button>
                         )}
@@ -929,7 +999,7 @@ export function MatrixDashboard({
                   type="button"
                   onClick={() => setTreePhase(p.phase)}
                   className={cn(
-                    "rounded-lg px-2.5 py-1 text-xs font-bold transition",
+                    "rounded-lg px-3 py-1.5 text-xs font-bold transition",
                     treePhase === p.phase
                       ? "bg-master-50 text-master-800 border border-master-300"
                       : "text-slate-500 hover:text-slate-800",
