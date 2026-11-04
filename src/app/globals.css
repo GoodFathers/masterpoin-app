@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@theme {
+  --color-master-50: #fff1f2;
+  --color-master-100: #ffe1e3;
+  --color-master-200: #ffc7cb;
+  --color-master-300: #ff9aa2;
+  --color-master-400: #fa6271;
+  --color-master-500: #ee3247;
+  --color-master-600: #d81630;
+  --color-master-700: #b50e26;
+  --color-master-800: #8f0f22;
+  --color-master-900: #7a1220;
+  --color-master-950: #43050d;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  --brand: #d81630;
+  --brand-dark: #7a1220;
+  --ink: #2a1116;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl border border-rose-100/80 bg-white shadow-[0_18px_45px_-32px_rgba(122,18,32,0.45)];
+  }
+  .card-muted {
+    @apply rounded-2xl border border-rose-100 bg-rose-50/50;
+  }
+  .label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-900/60;
+  }
+  .input {
+    @apply w-full rounded-xl border border-rose-200/80 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-master-500 focus:ring-4 focus:ring-master-500/10 disabled:cursor-not-allowed disabled:bg-slate-50;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply bg-gradient-to-br from-master-500 to-master-700 text-white shadow-lg shadow-master-600/25 hover:from-master-500 hover:to-master-800;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply border border-rose-200 bg-white text-master-800 hover:bg-rose-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply text-slate-600 hover:bg-rose-50 hover:text-master-800;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply bg-rose-600 text-white hover:bg-rose-700;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-medium text-master-800;
+  }
+  .skeleton {
+    @apply animate-pulse rounded-lg bg-rose-100/70;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(216, 22, 48, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(216, 22, 48, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(216, 22, 48, 0);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.35s ease-out both;
+}
+
+.live-dot {
+  animation: pulse-ring 2s infinite;
+}
+
+.hero-grid {
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(216, 22, 48, 0.14), transparent 45%),
+    radial-gradient(circle at 85% 12%, rgba(255, 175, 175, 0.35), transparent 40%),
+    linear-gradient(160deg, #fff 0%, #fff5f5 55%, #ffe9ea 100%);
+}
+
+.batik-grid {
+  background-image:
+    linear-gradient(rgba(216, 22, 48, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 22, 48, 0.055) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+.timer-digits {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+::selection {
+  background: rgba(216, 22, 48, 0.18);
+}
