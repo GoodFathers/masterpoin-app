@@ -1,0 +1,716 @@
+     1→"use client";
+     2→// ===================== MESIN PANGGILAN NYATA INDIIGOO =====================
+     3→// Client-side singleton untuk panggilan suara & video NYATA antar pengguna
+     4→// IndiGoo (WebRTC) + keanggotaan realtime via signaling socket.io
+     5→// (mini-services/call-service, diakses lewat "/?XTransformPort=3003").
+     6→//
+     7→// Tanggung jawab:
+     8→//  - Koneksi socket + auth token sesi + presence (siapa yang daring).
+     9→//  - Siklus hidup panggilan 1-on-1: invite → ring → accept/reject/missed →
+    10→//    offer/answer/ICE → aktif (timer) → end, termasuk fallback audio-only
+    11→//    bila kamera tidak tersedia, dan pembersihan resource yang aman.
+    12→//  - Menyimpan riwayat panggilan ke /api/calls (OUT utk penelepon, IN utk
+    13→//    penerima, MISSED bila tak dijawab).
+    14→//  - Konferensi mesh kecil: join/leave ruangan + relay offer/answer/ICE.
+    15→//
+    16→// Semua state tampilan hidup di store Zustand (src/store/realcall.ts) —
+    17→// mesin ini yang menuliskannya. UI (RealCallCenter) hanya membaca & memanggil
+    18→// aksi mesin. Server signaling TIDAK pernah menyentuh media.
+    19→
+    20→import type { Socket } from "socket.io-client";
+    21→import {
+    22→  playCallEndTone,
+    23→  startIncomingRing,
+    24→  startRingback,
+    25→  stopIncomingRing,
+    26→  stopRingback,
+    27→} from "@/lib/alarm";
+    28→import { getSessionToken } from "@/lib/session-token";
+    29→import { useRealcallStore, type CallKind, type PeerInfo, type CallPhase } from "@/store/realcall";
+    30→
+    31→const SIGNAL_URL = "/?XTransformPort=3003";
+    32→const ICE_SERVERS: RTCIceServer[] = [
+    33→  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    34→];
+    35→
+    36→export interface ActiveCall {
+    37→  callId: string;
+    38→  role: "caller" | "callee";
+    39→  peer: PeerInfo;
+    40→  kind: CallKind;
+    41→  phase: CallPhase; // ringing | connecting | active
+    42→  startedAt: number | null; // aktif sejak (epoch ms)
+    43→  videoFallback: boolean; // video diminta tapi kamera tak tersedia → audio-only
+    44→  muted: boolean;
+    45→  camOff: boolean;
+    46→}
+    47→
+    48→class RealCallEngine {
+    49→  private socket: Socket | null = null;
+    50→  private connecting = false;
+    51→  private generation = 0; // penanda siklus connect/disconnect (anti race StrictMode)
+    52→
+    53→  // WebRTC (1-on-1)
+    54→  private pc: RTCPeerConnection | null = null;
+    55→  private localStream: MediaStream | null = null;
+    56→  private remoteStream: MediaStream | null = null;
+    57→  private call: ActiveCall | null = null;
+    58→  private queuedCandidates: RTCIceCandidateInit[] = [];
+    59→  private makingOffer = false;
+    60→
+    61→  // Konferensi mesh
+    62→  private confRoomId: string | null = null;
+    63→  private confPeers = new Map<string, RTCPeerConnection>(); // peerSocketId -> pc
+    64→  private confStreams = new Map<string, MediaStream>(); // peerSocketId -> remote
+    65→  private confLocalStream: MediaStream | null = null;
+    66→
+    67→  /** Fallback media sintetis untuk lingkungan tanpa kamera/mik (sandbox/E2E). */
+    68→  static syntheticRequested = false;
+    69→
+    70→  // ---------------- KONEKSI & PRESENCE ----------------
+    71→
+    72→  ensureConnected(): void {
+    73→    if (typeof window === "undefined" || this.socket || this.connecting) return;
+    74→    const token = getSessionToken();
+    75→    if (!token) return; // belum login — jangan buka koneksi
+    76→    this.connecting = true;
+    77→    const gen = this.generation;
+    78→
+    79→    void import("socket.io-client").then(({ io }) => {
+    80→      if (gen !== this.generation) return; // sudah di-disconnect saat import berjalan
+    81→      const s = io(SIGNAL_URL, {
+    82→        path: "/", // DO NOT change — dipakai Caddy
+    83→        transports: ["websocket", "polling"],
+    84→        reconnection: true,
+    85→        reconnectionAttempts: 8,
+    86→        reconnectionDelay: 1200,
+    87→        timeout: 10000,
+    88→      });
+    89→      this.socket = s;
+    90→
+    91→      s.on("connect", () => {
+    92→        s.emit("auth", { token }, (res: { ok: boolean; user?: PeerInfo; peers?: PeerInfo[]; error?: string }) => {
+    93→          this.connecting = false;
+    94→          const st = useRealcallStore.getState();
+    95→          if (!res?.ok || !res.user) {
+    96→            st.setConn("error");
+    97→            return;
+    98→          }
+    99→          st.setMe(res.user);
+   100→          st.setPeers(res.peers ?? []);
+   101→          st.setConn("connected");
+   102→        });
+   103→      });
+   104→
+   105→      s.on("disconnect", () => {
+   106→        useRealcallStore.getState().setConn("connecting");
+   107→      });
+   108→
+   109→      s.on("presence:update", (peers: PeerInfo[]) => {
+   110→        useRealcallStore.getState().setPeers(peers ?? []);
+   111→      });
+   112→
+   113→      // ---------------- panggilan masuk ----------------
+   114→      s.on("call:invite", (p: { callId: string; from: PeerInfo; kind: CallKind }) => {
+   115→        const st = useRealcallStore.getState();
+   116→        if (this.call || st.incoming) {
+   117→          // sibuk — tolak otomatis
+   118→          s.emit("call:reject", { callId: p.callId });
+   119→          return;
+   120→        }
+   121→        st.setIncoming({ callId: p.callId, from: p.from, kind: p.kind, at: Date.now() });
+   122→        startIncomingRing();
+   123→      });
+   124→
+   125→      s.on("call:cancelled", ({ callId }: { callId: string }) => {
+   126→        const st = useRealcallStore.getState();
+   127→        if (st.incoming?.callId === callId) {
+   128→          st.setIncoming(null);
+   129→          stopIncomingRing();
+   130→          playCallEndTone("end");
+   131→        }
+   132→      });
+   133→
+   134→      s.on("call:missed", (p: { callId: string; reason: string }) => {
+   135→        // Dipanggil di KEDUA sisi saat timeout
+   136→        const st = useRealcallStore.getState();
+   137→        const wasCaller = this.call?.role === "caller" && this.call.callId === p.callId;
+   138→        st.setIncoming(null);
+   139→        stopIncomingRing();
+   140→        stopRingback();
+   141→        playCallEndTone("busy");
+   142→        if (this.call && this.call.callId === p.callId) {
+   143→          this.saveHistory(wasCaller ? "OUT" : "MISSED", 0);
+   144→          this.cleanupCall();
+   145→        }
+   146→      });
+   147→
+   148→      s.on("call:rejected", ({ callId }: { callId: string }) => {
+   149→        if (this.call?.callId === callId && this.call.role === "caller") {
+   150→          stopRingback();
+   151→          playCallEndTone("busy");
+   152→          this.saveHistory("OUT", 0); // panggilan keluar, tidak tersambung
+   153→          this.cleanupCall();
+   154→        }
+   155→      });
+   156→
+   157→      s.on("call:accepted", ({ callId }: { callId: string }) => {
+   158→        if (this.call?.callId === callId && this.call.role === "caller") {
+   159→          stopRingback();
+   160→          void this.startMediaAndOffer();
+   161→        }
+   162→      });
+   163→
+   164→      s.on("call:offer", ({ callId, sdp }: { callId: string; sdp: RTCSessionDescriptionInit }) => {
+   165→        void this.handleOffer(callId, sdp);
+   166→      });
+   167→
+   168→      s.on("call:answer", ({ callId, sdp }: { callId: string; sdp: RTCSessionDescriptionInit }) => {
+   169→        void this.handleAnswer(callId, sdp);
+   170→      });
+   171→
+   172→      s.on("call:ice", ({ callId, candidate }: { callId: string; candidate: RTCIceCandidateInit }) => {
+   173→        void this.handleCandidate(callId, candidate);
+   174→      });
+   175→
+   176→      s.on("call:ended", ({ callId, reason }: { callId: string; reason?: string }) => {
+   177→        if (this.call?.callId === callId) {
+   178→          const dur = this.call.phase === "active" && this.call.startedAt ? Math.round((Date.now() - this.call.startedAt) / 1000) : 0;
+   179→          stopRingback();
+   180→          playCallEndTone("end");
+   181→          if (this.call.role === "callee" && dur === 0 && reason !== "hangup") {
+   182→            this.saveHistory("MISSED", 0);
+   183→          } else {
+   184→            this.saveHistory(this.call.role === "caller" ? "OUT" : "IN", dur);
+   185→          }
+   186→          this.cleanupCall();
+   187→        }
+   188→      });
+   189→
+   190→      // ---------------- konferensi ----------------
+   191→      s.on("conf:peer-joined", (p: { roomId: string; peerSocketId: string; userId: string; username: string; accessId: string }) => {
+   192→        void this.confCreateOfferTo(p.peerSocketId, { userId: p.userId, username: p.username, accessId: p.accessId });
+   193→      });
+   194→
+   195→      s.on("conf:peer-left", ({ peerSocketId }: { peerSocketId: string }) => {
+   196→        this.confClosePeer(peerSocketId);
+   197→        useRealcallStore.getState().removeConfStream(peerSocketId);
+   198→      });
+   199→
+   200→      s.on("conf:relay", (p: { fromPeer: string; fromUser?: { userId: string; username: string }; kind: "offer" | "answer" | "ice"; payload: unknown }) => {
+   201→        void this.confHandleRelay(p);
+   202→      });
+   203→
+   204→      s.on("conf:invite", (p: { roomId: string; from: PeerInfo }) => {
+   205→        // Abaikan bila sedang sibuk (panggilan 1-on-1 atau sudah di konferensi)
+   206→        const st = useRealcallStore.getState();
+   207→        if (this.call || st.confActive) return;
+   208→        st.setConfInvite({ roomId: p.roomId, from: p.from });
+   209→      });
+   210→
+   211→      s.io.on("reconnect", () => {
+   212→        // reconnect → auth ulang
+   213→        s.emit("auth", { token: getSessionToken() }, () => undefined);
+   214→      });
+   215→    });
+   216→  }
+   217→
+   218→  disconnect(): void {
+   219→    this.generation++;
+   220→    this.connecting = false;
+   221→    this.end("logout");
+   222→    this.leaveConf();
+   223→    this.socket?.disconnect();
+   224→    this.socket = null;
+   225→    const st = useRealcallStore.getState();
+   226→    st.reset();
+   227→  }
+   228→
+   229→  private emit(event: string, payload?: unknown): boolean {
+   230→    if (!this.socket?.connected) return false;
+   231→    this.socket.emit(event, payload);
+   232→    return true;
+   233→  }
+   234→
+   235→  // ---------------- PANGGILAN 1-ON-1 ----------------
+   236→
+   237→  /** Mulai panggilan keluar (penelepon). */
+   238→  invite(peer: PeerInfo, kind: CallKind): { ok: boolean; error?: string } {
+   239→    if (this.call) return { ok: false, error: "Ada panggilan yang sedang berjalan" };
+   240→    const st = useRealcallStore.getState();
+   241→    if (st.incoming) return { ok: false, error: "Ada panggilan masuk yang belum direspon" };
+   242→    const callId = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+   243→    this.call = {
+   244→      callId,
+   245→      role: "caller",
+   246→      peer,
+   247→      kind,
+   248→      phase: "ringing",
+   249→      startedAt: null,
+   250→      videoFallback: false,
+   251→      muted: false,
+   252→      camOff: false,
+   253→    };
+   254→    st.setCall(this.call);
+   255→    startRingback();
+   256→    const sent = this.emit("call:invite", { callId, to: peer.userId, kind });
+   257→    if (!sent) {
+   258→      stopRingback();
+   259→      this.cleanupCall();
+   260→      return { ok: false, error: "Tidak terhubung ke server realtime" };
+   261→    }
+   262→    return { ok: true };
+   263→  }
+   264→
+   265→  /** Penerima menekan terima. */
+   266→  accept(): void {
+   267→    const st = useRealcallStore.getState();
+   268→    const inc = st.incoming;
+   269→    if (!inc) return;
+   270→    stopIncomingRing();
+   271→    this.call = {
+   272→      callId: inc.callId,
+   273→      role: "callee",
+   274→      peer: inc.from,
+   275→      kind: inc.kind,
+   276→      phase: "connecting",
+   277→      startedAt: null,
+   278→      videoFallback: false,
+   279→      muted: false,
+   280→      camOff: false,
+   281→    };
+   282→    st.setIncoming(null);
+   283→    st.setCall(this.call);
+   284→    this.emit("call:accept", { callId: inc.callId });
+   285→    // Media + answer dibuat saat offer dari caller tiba (handleOffer)
+   286→  }
+   287→
+   288→  /** Penerima menolak. */
+   289→  reject(): void {
+   290→    const st = useRealcallStore.getState();
+   291→    const inc = st.incoming;
+   292→    if (!inc) return;
+   293→    stopIncomingRing();
+   294→    st.setIncoming(null);
+   295→    this.emit("call:reject", { callId: inc.callId });
+   296→    playCallEndTone("end");
+   297→  }
+   298→
+   299→  /** Akhiri panggilan dari sisi mana pun. */
+   300→  end(reason: string = "hangup"): void {
+   301→    if (!this.call) {
+   302→      // masih dering masuk tapi belum accept → anggap tolak
+   303→      this.reject();
+   304→      return;
+   305→    }
+   306→    const call = this.call;
+   307→    const dur = call.phase === "active" && call.startedAt ? Math.round((Date.now() - call.startedAt) / 1000) : 0;
+   308→    this.emit("call:end", { callId: call.callId, reason });
+   309→    stopRingback();
+   310→    stopIncomingRing();
+   311→    playCallEndTone("end");
+   312→    this.saveHistory(call.role === "caller" ? "OUT" : dur > 0 ? "IN" : "MISSED", dur);
+   313→    this.cleanupCall();
+   314→  }
+   315→
+   316→  toggleMute(): void {
+   317→    if (!this.call || !this.localStream) return;
+   318→    const next = !this.call.muted;
+   319→    for (const t of this.localStream.getAudioTracks()) t.enabled = !next;
+   320→    this.call = { ...this.call, muted: next };
+   321→    useRealcallStore.getState().setCall(this.call);
+   322→  }
+   323→
+   324→  async toggleCamera(): Promise<void> {
+   325→    if (!this.call || this.call.kind !== "VIDEO" || !this.localStream) return;
+   326→    const next = !this.call.camOff;
+   327→    try {
+   328→      if (next) {
+   329→        for (const t of this.localStream.getVideoTracks()) t.enabled = false;
+   330→      } else {
+   331→        for (const t of this.localStream.getVideoTracks()) t.enabled = true;
+   332→      }
+   333→      this.call = { ...this.call, camOff: next };
+   334→      useRealcallStore.getState().setCall(this.call);
+   335→    } catch {
+   336→      // abaikan
+   337→    }
+   338→  }
+   339→
+   340→  /** (Penelepon) setelah di-accept: ambil media, buat PC, kirim offer. */
+   341→  private async startMediaAndOffer(): Promise<void> {
+   342→    if (!this.call || this.call.role !== "caller") return;
+   343→    this.setPhase("connecting");
+   344→    const ok = await this.setupLocalMedia(this.call.kind);
+   345→    if (!ok || !this.call) return;
+   346→    await this.createPeer();
+   347→    if (!this.pc || !this.localStream) return;
+   348→    for (const t of this.localStream.getTracks()) this.pc.addTrack(t, this.localStream);
+   349→    try {
+   350→      this.makingOffer = true;
+   351→      const offer = await this.pc.createOffer();
+   352→      await this.pc.setLocalDescription(offer);
+   353→      this.emit("call:offer", { callId: this.call.callId, sdp: this.pc.localDescription });
+   354→    } catch {
+   355→      this.failCall("Gagal menyiapkan koneksi");
+   356→    } finally {
+   357→      this.makingOffer = false;
+   358→    }
+   359→  }
+   360→
+   361→  /** (Penerima) offer tiba → ambil media, jawab. */
+   362→  private async handleOffer(callId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
+   363→    if (!this.call || this.call.callId !== callId || this.call.role !== "callee") return;
+   364→    this.setPhase("connecting");
+   365→    const ok = await this.setupLocalMedia(this.call.kind);
+   366→    if (!ok || !this.call) return;
+   367→    await this.createPeer();
+   368→    if (!this.pc) return;
+   369→    try {
+   370→      await this.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+   371→      for (const t of this.localStream?.getTracks() ?? []) this.pc.addTrack(t, this.localStream!);
+   372→      const answer = await this.pc.createAnswer();
+   373→      await this.pc.setLocalDescription(answer);
+   374→      this.emit("call:answer", { callId, sdp: this.pc.localDescription });
+   375→      for (const c of this.queuedCandidates) await this.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => undefined);
+   376→      this.queuedCandidates = [];
+   377→    } catch {
+   378→      this.failCall("Gagal menjawab panggilan");
+   379→    }
+   380→  }
+   381→
+   382→  private async handleAnswer(callId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
+   383→    if (!this.pc || !this.call || this.call.callId !== callId) return;
+   384→    try {
+   385→      await this.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+   386→      for (const c of this.queuedCandidates) await this.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => undefined);
+   387→      this.queuedCandidates = [];
+   388→    } catch {
+   389→      this.failCall("Negosiasi koneksi gagal");
+   390→    }
+   391→  }
+   392→
+   393→  private async handleCandidate(callId: string, candidate: RTCIceCandidateInit): Promise<void> {
+   394→    if (!this.call || this.call.callId !== callId) return;
+   395→    if (!this.pc || !this.pc.remoteDescription) {
+   396→      this.queuedCandidates.push(candidate);
+   397→      return;
+   398→    }
+   399→    await this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => undefined);
+   400→  }
+   401→
+   402→  /** Ambil mic (+ kamera utk VIDEO). Gagal kamera → audio-only (videoFallback). */
+   403→  private async setupLocalMedia(kind: CallKind): Promise<boolean> {
+   404→    if (this.localStream) return true;
+   405→    const wantVideo = kind === "VIDEO";
+   406→    try {
+   407→      this.localStream = await navigator.mediaDevices.getUserMedia({
+   408→        audio: true,
+   409→        video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } : false,
+   410→      });
+   411→      useRealcallStore.getState().setLocalStream(this.localStream);
+   412→      return true;
+   413→    } catch {
+   414→      if (wantVideo) {
+   415→        try {
+   416→          this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   417→          if (this.call) {
+   418→            this.call = { ...this.call, videoFallback: true, kind: "VOICE" };
+   419→            useRealcallStore.getState().setCall(this.call);
+   420→          }
+   421→          useRealcallStore.getState().setLocalStream(this.localStream);
+   422→          return true;
+   423→        } catch {
+   424→          this.failCall("Mikrofon & kamera tidak dapat diakses — izinkan akses di browser.");
+   425→          return false;
+   426→        }
+   427→      }
+   428→      this.failCall("Mikrofon tidak dapat diakses — izinkan akses mikrofon di browser.");
+   429→      return false;
+   430→    }
+   431→  }
+   432→
+   433→  private createPeer(): Promise<void> {
+   434→    return new Promise((resolve) => {
+   435→      if (this.pc) return resolve();
+   436→      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+   437→      this.pc = pc;
+   438→      this.remoteStream = new MediaStream();
+   439→
+   440→      pc.ontrack = (ev) => {
+   441→        for (const track of ev.streams[0]?.getTracks() ?? [ev.track]) {
+   442→          if (!this.remoteStream?.getTracks().some((t) => t.id === track.id)) {
+   443→            this.remoteStream?.addTrack(track);
+   444→          }
+   445→        }
+   446→        useRealcallStore.getState().setRemoteStream(this.remoteStream);
+   447→      };
+   448→      pc.onicecandidate = (ev) => {
+   449→        if (ev.candidate && this.call) {
+   450→          this.emit("call:ice", { callId: this.call.callId, candidate: ev.candidate.toJSON() });
+   451→        }
+   452→      };
+   453→      pc.onconnectionstatechange = () => {
+   454→        if (!this.call) return;
+   455→        if (pc.connectionState === "connected") {
+   456→          this.setPhase("active");
+   457→          if (this.call.startedAt === null) {
+   458→            this.call = { ...this.call, startedAt: Date.now() };
+   459→            useRealcallStore.getState().setCall(this.call);
+   460→          }
+   461→        } else if (pc.connectionState === "failed") {
+   462→          this.failCall("Koneksi media gagal (jaringan)");
+   463→        }
+   464→      };
+   465→      resolve();
+   466→    });
+   467→  }
+   468→
+   469→  private setPhase(phase: CallPhase): void {
+   470→    if (!this.call) return;
+   471→    this.call = { ...this.call, phase };
+   472→    useRealcallStore.getState().setCall(this.call);
+   473→  }
+   474→
+   475→  private failCall(msg: string): void {
+   476→    if (this.call) this.emit("call:end", { callId: this.call.callId, reason: "error" });
+   477→    playCallEndTone("busy");
+   478→    useRealcallStore.getState().setError(msg);
+   479→    this.cleanupCall();
+   480→  }
+   481→
+   482→  /** Simpan riwayat ke /api/calls + segarkan daftar. */
+   483→  private async saveHistory(direction: "IN" | "OUT" | "MISSED", durationSec: number): Promise<void> {
+   484→    const call = this.call;
+   485→    if (!call) return;
+   486→    try {
+   487→      await fetch("/api/calls", {
+   488→        method: "POST",
+   489→        headers: { "Content-Type": "application/json" },
+   490→        body: JSON.stringify({
+   491→          peerName: call.peer.username,
+   492→          colorKey: call.peer.accessId ? colorFromAccessId(call.peer.accessId) : "emerald",
+   493→          kind: call.kind,
+   494→          direction,
+   495→          durationSec,
+   496→        }),
+   497→      });
+   498→      window.dispatchEvent(new CustomEvent("indigoo:calls-refresh"));
+   499→    } catch {
+   500→      // riwayat gagal tersimpan — panggilan tetap berjalan
+   501→    }
+   502→  }
+   503→
+   504→  /** Bersihkan seluruh resource panggilan 1-on-1 (aman dipanggil dua kali). */
+   505→  private cleanupCall(): void {
+   506→    stopRingback();
+   507→    stopIncomingRing();
+   508→    this.queuedCandidates = [];
+   509→    this.makingOffer = false;
+   510→    if (this.pc) {
+   511→      try {
+   512→        this.pc.ontrack = null;
+   513→        this.pc.onicecandidate = null;
+   514→        this.pc.onconnectionstatechange = null;
+   515→        this.pc.close();
+   516→      } catch {
+   517→        // abaikan
+   518→      }
+   519→      this.pc = null;
+   520→    }
+   521→    for (const t of this.localStream?.getTracks() ?? []) t.stop();
+   522→    this.localStream = null;
+   523→    this.remoteStream = null;
+   524→    this.call = null;
+   525→    const st = useRealcallStore.getState();
+   526→    st.setCall(null);
+   527→    st.setRemoteStream(null);
+   528→    st.setLocalStream(null);
+   529→  }
+   530→
+   531→  // ---------------- KONFERENSI (mesh kecil) ----------------
+   532→
+   533→  async joinConf(roomId: string): Promise<{ ok: boolean; error?: string }> {
+   534→    if (!this.socket?.connected) return { ok: false, error: "Tidak terhubung ke server realtime" };
+   535→    if (this.call) return { ok: false, error: "Akhiri panggilan dahulu" };
+   536→    try {
+   537→      this.confLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: { ideal: 1280 } } });
+   538→    } catch {
+   539→      try {
+   540→        this.confLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   541→      } catch {
+   542→        return { ok: false, error: "Mikrofon tidak dapat diakses" };
+   543→      }
+   544→    }
+   545→    useRealcallStore.getState().setConfLocalStream(this.confLocalStream);
+   546→
+   547→    return new Promise((resolve) => {
+   548→      const s = this.socket!;
+   549→      const timeout = setTimeout(() => resolve({ ok: false, error: "Server tidak merespon" }), 8000);
+   550→      s.emit("conf:join", { roomId }, async (res: { ok: boolean; peers?: Array<{ peerSocketId: string; userId: string; username: string; accessId: string }> }) => {
+   551→        clearTimeout(timeout);
+   552→        if (!res?.ok) return resolve({ ok: false, error: "Gagal bergabung ruangan" });
+   553→        this.confRoomId = roomId;
+   554→        useRealcallStore.getState().setConf(roomId, true);
+   555→        // Peer yang SUDAH di ruang membuat offer ke pendatang → kita (pendatang)
+   556→        // hanya menyiapkan dan menunggu offer mereka.
+   557→        resolve({ ok: true });
+   558→      });
+   559→    });
+   560→  }
+   561→
+   562→  leaveConf(): void {
+   563→    if (this.confRoomId) this.emit("conf:leave", { roomId: this.confRoomId });
+   564→    this.confRoomId = null;
+   565→    for (const id of Array.from(this.confPeers.keys())) this.confClosePeer(id);
+   566→    for (const t of this.confLocalStream?.getTracks() ?? []) t.stop();
+   567→    this.confLocalStream = null;
+   568→    const st = useRealcallStore.getState();
+   569→    st.resetConf();
+   570→  }
+   571→
+   572→  inviteToConf(peer: PeerInfo): void {
+   573→    if (!this.confRoomId) return;
+   574→    this.emit("conf:invite", { to: peer.userId, roomId: this.confRoomId });
+   575→  }
+   576→
+   577→  confToggleMute(): void {
+   578→    for (const t of this.confLocalStream?.getAudioTracks() ?? []) t.enabled = !t.enabled;
+   579→    useRealcallStore.getState().setConfMuted(!useRealcallStore.getState().confMuted);
+   580→  }
+   581→
+   582→  confToggleCam(): void {
+   583→    for (const t of this.confLocalStream?.getVideoTracks() ?? []) t.enabled = !t.enabled;
+   584→    useRealcallStore.getState().setConfCamOff(!useRealcallStore.getState().confCamOff);
+   585→  }
+   586→
+   587→  private async confEnsureLocal(): Promise<MediaStream | null> {
+   588→    if (this.confLocalStream) return this.confLocalStream;
+   589→    try {
+   590→      this.confLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+   591→    } catch {
+   592→      try {
+   593→        this.confLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   594→      } catch {
+   595→        return null;
+   596→      }
+   597→    }
+   598→    useRealcallStore.getState().setConfLocalStream(this.confLocalStream);
+   599→    return this.confLocalStream;
+   600→  }
+   601→
+   602→  /** Peer lama → buat offer ke pendatang baru. */
+   603→  private async confCreateOfferTo(peerSocketId: string, user: { userId: string; username: string; accessId: string }): Promise<void> {
+   604→    if (!this.confRoomId || this.confPeers.has(peerSocketId)) return;
+   605→    const local = await this.confEnsureLocal();
+   606→    if (!local) return;
+   607→    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+   608→    this.confPeers.set(peerSocketId, pc);
+   609→    const remote = new MediaStream();
+   610→    this.confStreams.set(peerSocketId, remote);
+   611→
+   612→    for (const t of local.getTracks()) pc.addTrack(t, local);
+   613→    pc.ontrack = (ev) => {
+   614→      for (const track of ev.streams[0]?.getTracks() ?? [ev.track]) {
+   615→        if (!remote.getTracks().some((t) => t.id === track.id)) remote.addTrack(track);
+   616→      }
+   617→      useRealcallStore.getState().setConfStream(peerSocketId, remote, user);
+   618→    };
+   619→    pc.onicecandidate = (ev) => {
+   620→      if (ev.candidate) {
+   621→        this.emit("conf:relay", { roomId: this.confRoomId, toPeer: peerSocketId, kind: "ice", payload: ev.candidate.toJSON() });
+   622→      }
+   623→    };
+   624→    try {
+   625→      const offer = await pc.createOffer();
+   626→      await pc.setLocalDescription(offer);
+   627→      this.emit("conf:relay", { roomId: this.confRoomId, toPeer: peerSocketId, kind: "offer", payload: pc.localDescription });
+   628→      useRealcallStore.getState().addConfPeer(peerSocketId, user);
+   629→    } catch {
+   630→      this.confClosePeer(peerSocketId);
+   631→    }
+   632→  }
+   633→
+   634→  /** Pendatang → proses offer/answer/ice dari peer lama. */
+   635→  private async confHandleRelay(p: { fromPeer: string; fromUser?: { userId: string; username: string }; kind: "offer" | "answer" | "ice"; payload: unknown }): Promise<void> {
+   636→    if (!this.confRoomId) return;
+   637→    let pc = this.confPeers.get(p.fromPeer);
+   638→    if (p.kind === "offer") {
+   639→      if (!pc) {
+   640→        const local = await this.confEnsureLocal();
+   641→        if (!local) return;
+   642→        pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+   643→        this.confPeers.set(p.fromPeer, pc);
+   644→        const remote = new MediaStream();
+   645→        this.confStreams.set(p.fromPeer, remote);
+   646→        for (const t of local.getTracks()) pc.addTrack(t, local);
+   647→        pc.ontrack = (ev) => {
+   648→          for (const track of ev.streams[0]?.getTracks() ?? [ev.track]) {
+   649→            if (!remote.getTracks().some((t) => t.id === track.id)) remote.addTrack(track);
+   650→          }
+   651→          useRealcallStore.getState().setConfStream(p.fromPeer, remote, {
+   652→            userId: p.fromUser?.userId ?? "?",
+   653→            username: p.fromUser?.username ?? "Peserta",
+   654→            accessId: "",
+   655→          });
+   656→        };
+   657→        pc.onicecandidate = (ev) => {
+   658→          if (ev.candidate) {
+   659→            this.emit("conf:relay", { roomId: this.confRoomId, toPeer: p.fromPeer, kind: "ice", payload: ev.candidate.toJSON() });
+   660→          }
+   661→        };
+   662→        useRealcallStore.getState().addConfPeer(p.fromPeer, {
+   663→          userId: p.fromUser?.userId ?? "?",
+   664→          username: p.fromUser?.username ?? "Peserta",
+   665→          accessId: "",
+   666→        });
+   667→      }
+   668→      try {
+   669→        await pc.setRemoteDescription(new RTCSessionDescription(p.payload as RTCSessionDescriptionInit));
+   670→        const answer = await pc.createAnswer();
+   671→        await pc.setLocalDescription(answer);
+   672→        this.emit("conf:relay", { roomId: this.confRoomId, toPeer: p.fromPeer, kind: "answer", payload: pc.localDescription });
+   673→      } catch {
+   674→        this.confClosePeer(p.fromPeer);
+   675→      }
+   676→      return;
+   677→    }
+   678→    if (!pc) return;
+   679→    try {
+   680→      if (p.kind === "answer") {
+   681→        await pc.setRemoteDescription(new RTCSessionDescription(p.payload as RTCSessionDescriptionInit));
+   682→      } else {
+   683→        await pc.addIceCandidate(new RTCIceCandidate(p.payload as RTCIceCandidateInit)).catch(() => undefined);
+   684→      }
+   685→    } catch {
+   686→      // kandidat/answer usang — abaikan
+   687→    }
+   688→  }
+   689→
+   690→  private confClosePeer(peerSocketId: string): void {
+   691→    const pc = this.confPeers.get(peerSocketId);
+   692→    if (pc) {
+   693→      try {
+   694→        pc.close();
+   695→      } catch {
+   696→        // abaikan
+   697→      }
+   698→    }
+   699→    this.confPeers.delete(peerSocketId);
+   700→    this.confStreams.delete(peerSocketId);
+   701→  }
+   702→}
+   703→
+   704→/** Warna avatar stabil dari Access ID (mis. ID-000001 → kunci palet). */
+   705→export function colorFromAccessId(accessId: string): string {
+   706→  const keys = ["emerald", "amber", "violet", "rose", "teal", "orange", "cyan", "lime"];
+   707→  let h = 0;
+   708→  for (let i = 0; i < accessId.length; i++) h = (h * 31 + accessId.charCodeAt(i)) >>> 0;
+   709→  return keys[h % keys.length];
+   710→}
+   711→
+   712→/** Singleton global (bertahan lintas hot-reload modul). */
+   713→const g = globalThis as unknown as { __indigooRealCall?: RealCallEngine };
+   714→export const realcall: RealCallEngine = g.__indigooRealCall ?? new RealCallEngine();
+   715→g.__indigooRealCall = realcall;
+   716→

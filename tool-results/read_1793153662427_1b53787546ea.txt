@@ -1,0 +1,261 @@
+     1→Task: Sistem hak akses 3 peran (Super Admin / Admin / Pengguna) — login nyata, Manajemen Pengguna di akun Super Admin, gating Tambah/Edit/Hapus/Upload di seluruh fitur
+     2→
+     3→Work Log:
+     4→- Audit legacy: ekosistem IndiGooApp lama (components/indigoo/* 30 file, api missions/routines/rewards/timer/admin/location/register/next-id, libs indigoo/missions/rewards/routines/admin-data/me-payload/system-config/alarm/realcall, store/realcall) TIDAK dirute (page.tsx hanya AppShell) → dihapus seluruhnya; 77 error tsc lama hilang. api/simulate dipertahankan (dipakai ConversationPanel); api/posts & api/qr dipertahankan (ChannelsView/LinkView/QrPromoCard).
+     5→- Fondasi auth legacy DIHIDUPKAN: lib/auth.ts (scrypt + HMAC session, Bearer+cookie dual-path untuk preview iframe), lib/session-token.ts (jembatan fetch Authorization), lib/admin-guard.ts.
+     6→- Schema: model User (accessId unik ID-xxxxxx, username unik, name, password scrypt, role SUPER_ADMIN|ADMIN|USER, active) + VideoPost.authorUserId (relasi, SetNull) — db:push OK. Seed idempoten prisma/seed-users.ts: superadmin/admin/pengguna (password indigoo123).
+     7→- RBAC core: lib/user.ts client-safe (Role, SafeUser, ROLE_PERMS matrix: SUPER_ADMIN=users.manage+content.manageAny+market.manage+upload.media; ADMIN=content.manageAny+market.manage+upload.media; USER=upload.media; can(), canManageVideo(), roleBadgeClass, normalizeAccessId). admin-guard: requireUser (wajib login+aktif), requireRole(roles), requireSuperAdmin.
+     8→- API: rewrite api/auth/login (username ATAU ID-xxxxxx + password; tolak akun nonaktif), api/auth/me (safe payload, tanpa password); api/auth/logout tetap. Baru: GET/POST /api/users (Super Admin; accessId otomatis max+1), PATCH/DELETE /api/users/[id] (proteksi: tak boleh ubah peran/nonaktif/hapus akun sendiri; minimal 1 Super Admin aktif tersisa). Videos: POST attach authorUserId dari sesi; BARU PATCH/DELETE /api/videos/[id] (admin+ semua video; USER hanya miliknya). Market: BARU POST /api/market + PATCH/DELETE /api/market/[id] (Super Admin & Admin).
+     9→- Frontend: hooks/use-auth.tsx (AuthProvider + useAuth + loginRequest); extras/LoginScreen.tsx (branding DB, username/ID + password, eye toggle, 3 chip masuk cepat akun demo, error alert); extras/LogoutFlow.tsx rewrite (performLogout nyata: clearSessionToken → await POST /api/auth/logout → reload — FIX BUG: fetch fire-and-forget terpotong reload sehingga cookie tak terhapus; kini .finally(reload)); AppShell = AuthProvider + ShellInner (splash sesi → LoginScreen bila !user), ViewId "users", NAV Lainnya + Manajemen Pengguna (perm users.manage), visibleNav() menyaring drawer/rail per peran, menu ⋮ chat + item Manajemen Pengguna (kondisional), drawer BusinessHeader menampilkan akun aktif + badge peran.
+    10→- UsersView: guard akses (EmptyState utk non-super-admin), statistik 4 chip, pencarian, daftar akun (avatar gradasi per peran, badge, accessId mono, status), aksi Edit/Nonaktifkan-Hapus (disabled utk akun sendiri), dialog Tambah (nama/username/password/peran radio 3 dgn deskripsi hak) & Edit (peran, switch aktif, reset password opsional), konfirmasi hapus.
+    11→- BerandaView: tombol Edit/Hapus di rail aksi video (kondisional via canManageVideo: admin+ semua, pengguna miliknya) + VideoEditDialog (judul+kategori → PATCH) + ConfirmDialog hapus.
+    12→- MarketplaceView: tombol Tambah Produk (header) + tombol Edit/Hapus per kartu (kondisional can market.manage) + ProductFormDialog (nama/harga/stok/kategori/emoji picker/11 swatch gradasi/penjual/lokasi) + konfirmasi hapus + flag sessionStorage wa_market_new.
+    13→- CreateSheet: opsi ke-3 "Tambah Produk Marketplace" hanya utk Super Admin/Admin → set flag + navigasi ke Marketplace (dialog buka otomatis).
+    14→- Insiden dev: syntax error ?? campur || (UsersView) → diperbaiki; server restart utk Prisma client baru.
+    15→- E2E (agent-browser 390×844 + 1280×800, upload/e2e-task11-*.png): LoginScreen tampil + chip demo; superadmin masuk (me SUPER_ADMIN); drawer ada Manajemen Pengguna; UsersView 3 akun + statistik; tambah kasir (ID-000004 otomatis, role Admin) → edit peran ke Pengguna → hapus (3 baris kembali); PATCH peran sendiri → 400 "Tidak dapat mengubah peran akun sendiri"; CRUD produk via API (POST 200, PATCH 200, DELETE 200, item hilang dari list); Beranda: Edit/Hapus video terlihat, edit judul tersimpan (lalu dipulihkan); keluar → admin: /api/users 403, CRUD produk 200, drawer TANPA Manajemen Pengguna, badge "Admin Toko · ID-000002"; keluar (fix logout terverifikasi: 401 + layar login) → pengguna: /api/users 403, POST /api/market 403, Marketplace TANPA tombol tambah/edit/hapus, Beranda TANPA Edit/Hapus, sheet "+" hanya Buat Foto/Buat Video; unggah video sendiri (authorName "Pengguna Demo", authorUserId attach) → Edit/Hapus MUNCUL di video miliknya → hapus via UI (DB 10 kembali); desktop superadmin: rail 19 item termasuk Manajemen Pengguna.
+    16→- bunx tsc --noEmit: 0 error (seluruh proyek); bun run lint bersih; console hanya warning a11y Radix standar; dev.log sehat.
+    17→
+    18→Stage Summary:
+    19→- Hak akses 3 peran hidup end-to-end: login nyata (username/ID Akses + password, sesi cookie+Bearer tahan iframe preview), akun demo superadmin/admin/pengguna (indigoo123) dengan masuk-cepat 1 ketuk. Super Admin mengelola seluruh akun (tambah/edit/hapus/nonaktifkan/reset password/atur peran, proteksi akun-sendiri & super-admin-terakhir), mengelola semua video & produk marketplace, serta upload. Admin mengelola konten & marketplace tapi tidak bisa kelola akun. Pengguna hanya upload foto/video sendiri (bisa edit/hapus unggahannya) + fitur umum. Semua gating ditegakkan di SERVER (401/403) dan di-UI (menu/tombol disembunyikan). 77 error tsc lama ikut bersih via penghapusan kode legacy mati.
+    20→
+    21→---
+    22→Task ID: 11
+    23→Agent: Z.ai Code (main)
+    24→Task: Tukar tempat tab "Edit" dan "Pratinjau" pada fitur profil (BusinessProfileView)
+    25→
+    26→Work Log:
+    27→- Grep "Pratinjau" -> hanya BusinessProfileView.tsx yang punya tab Edit/Pratinjau (Profil Bisnis, tab mobile/tablet); desktop pakai layout berdampingan tanpa tab
+    28→- Edit src/components/views/BusinessProfileView.tsx: urutan TabsTrigger/TabsContent ditukar -> [Pratinjau | Edit]; defaultValue="edit" dipertahankan agar halaman tetap membuka form Edit
+    29→- Verifikasi: tsc (filter) 0 error di file tsb, lint bersih
+    30→- E2E agent-browser: mobile 390x844 login "Masuk sebagai Super Admin" -> nav Profil -> tablist "PratinjauEdit" urutan benar, klik Pratinjau = preview tampil, klik Edit = form tampil; desktop 1280x800: tanpa tab, form+preview berdampingan utuh; errors/console bersih
+    31→- Screenshot: upload/e2e-tabs-swap-mobile-pratinjau.png, upload/e2e-tabs-swap-desktop.png
+    32→
+    33→Stage Summary:
+    34→- Tab fitur profil kini berurutan Pratinjau (kiri) lalu Edit (kanan) di mobile/tablet; perilaku default (membuka form Edit) tidak berubah; desktop tidak berubah (form kiri, preview kanan)
+    35→- Catatan: aplikasi ternyata memiliki layar login dengan tombol cepat "Masuk sebagai Super Admin/Admin/Pengguna" (terkait permintaan RBAC sebelumnya) — belum dieksplor lebih lanjut
+    36→
+    37→---
+    38→Task ID: 12
+    39→Agent: Z.ai Code (main)
+    40→Task: Ikuti anotasi screenshot — (1) Marketplace: hapus header merah & pindahkan "+ Tambah Produk" ke panel header atas; (2) Profil Bisnis: hapus bagian header (mobile)
+    41→
+    42→Work Log:
+    43→- MarketplaceView.tsx: baris judul (ikon + "Marketplace" + subtitle) -> hidden md:flex (mobile dihapus, desktop tetap); tombol Tambah Produk dalam view dipindah -> AppShell top bar (mobile, view=marketplace, can(role,"market.manage")) via CustomEvent "wa:market:new-product"; MarketplaceView pasang listener event tsb; tombol versi desktop tetap di baris judul (md+)
+    44→- AppShell.tsx: tambah Button "+ Tambah Produk" (size sm, ml-auto) di header mobile setelah tombol chat baru, hanya view marketplace + izin market.manage (Super Admin/Admin)
+    45→- BusinessProfileView.tsx: ViewHeader "Profil Bisnis / Kelola informasi toko..." -> hanya desktop ({isDesktop && ...}) sesuai "Hapus Bagian Ini"
+    46→- Perbaikan regresi: penghapusan pertama membuat desktop kehilangan tombol Tambah Produk -> dikembalikan di baris judul desktop (hidden md:flex), Plus import dikembalikan
+    47→- Verifikasi: tsc (filter) 0 error, lint bersih; E2E mobile 390x844 (Super Admin): header merah hilang, tombol di top bar, klik -> dialog "Tambah Produk" terbuka; Profil: header hilang, langsung tab Pratinjau/Edit; desktop 1280x800: header Marketplace + tombol Tambah Produk utuh (dialog terbuka), header Profil Bisnis utuh; role Pengguna (mobile+desktop): tanpa tombol Tambah/Edit/Hapus produk; errors/console/dev.log bersih
+    48→- Screenshot: upload/e2e-market-header-mobile.png, e2e-market-desktop-recheck.png, e2e-profile-header-mobile.png, e2e-profile-desktop.png, e2e-market-pengguna-mobile.png
+    49→
+    50→Stage Summary:
+    51→- Mobile Marketplace: judul duplikat dihapus, "+ Tambah Produk" kini di pojok kanan panel header atas (persis kotak hijau anotasi), hanya untuk Super Admin/Admin
+    52→- Mobile Profil Bisnis: bagian header dihapus, konten mulai dari tab Pratinjau/Edit
+    53→- Desktop tidak berubah (header & tombol tetap); izin RBAC market.manage dihormati di semua titik
+    54→
+    55→---
+    56→Task ID: 13
+    57→Agent: Z.ai Code (main)
+    58→Task: Hapus mata uang — semua harga pakai poin mP (1 mP = Rp 1, tidak dipublikasikan); desain kartu produk memakai jenis produk, bukan logo/simbol/ikon
+    59→
+    60→Work Log:
+    61→- wa-utils.ts: formatRupiah -> formatPoints ("62.500 mP"); komentar internal 1 mP = Rp 1 tidak ditampilkan
+    62→- Semua pemakai di-update: CatalogView, MessageBubble (kartu produk di chat), Composer (pilih katalog), CartSheet (5x), AdCampaignCard (budget iklan + label slider "Rp 50 rb"/"Rp 500 rb" -> "50 rb mP"/"500 rb mP")
+    63→- MarketplaceView: formatRp lokal -> formatPoints; kartu produk: emoji diganti TEKS JENIS produk (uppercase, tebal) di atas gradasi per-kategori (makanan=amber, fashion=violet, kerajinan=cyan, jasa=teal, agro=lime; fallback emerald); badge kategori kecil dihapus (kini redundan); badge stok tetap
+    64→- Form Tambah/Edit Produk Marketplace: picker "Ikon produk" (emoji) & "Warna kartu" DIHAPUS — desain turun dari kategori; label "Harga (Rp)" -> "Harga (mPoin)"; payload tak lagi kirim emoji/colorKey (API punya default); hint "Jenis produk menentukan tampilan kartu (warna & label)"
+    65→- ProductDialog (katalog): "Harga (Rp)" -> "Harga (mPoin)"
+    66→- Verifikasi: tsc 0 error, lint bersih, tidak ada "Rp" tersisa di UI (hanya komentar kode); E2E mobile 390x844: kartu "MAKANAN" tanpa emoji, harga "62.500 mP", tanpa "Rp"; dialog tanpa picker ikon/warna; Katalog harga mP; desktop: tab Fashion -> kartu "FASHION" gradasi violet + "89.000 mP"; errors console hanya warning Radix lama; dev.log bersih
+    67→- Screenshot: upload/e2e-mp-market-cards.png, e2e-mp-catalog.png, e2e-mp-fashion-desktop.png
+    68→
+    69→Stage Summary:
+    70→- Seluruh ekonomi aplikasi kini berbasis poin mP (marketplace, katalog, keranjang, kartu produk di chat, budget iklan); aturan 1 mP = Rp 1 hanya konversi internal, tidak pernah tampil
+    71→- Desain kartu produk Marketplace 100% diturunkan dari jenis/kategori produk (gradasi + teks jenis besar) — tanpa emoji/ikon/warna manual
+    72→- Skema DB tidak berubah (kolom emoji/colorKey tetap, hanya tak lagi dipakai/ditampilkan)
+    73→
+    74→---
+    75→Task ID: 14
+    76→Agent: Z.ai Code (main)
+    77→Task: Tambah kategori produk "Sembako" + 4 produk Paket Sembako (250rb/500rb/750rb/1jt mP)
+    78→
+    79→Work Log:
+    80→- MarketplaceView.tsx: CATEGORIES + { id: "sembako", label: "Sembako" } (urut setelah Makanan); CATEGORY_LABEL + CATEGORY_GRADIENTS sembako = GRADIENTS.red (from-red-200 to-rose-400)
+    81→- API src/app/api/market/route.ts & [id]/route.ts: whitelist CATEGORIES + "sembako" (POST/PATCH)
+    82→- prisma/seed-beranda.ts: 4 entri MARKET baru kategori sembako, seller IndiGoo Official (+62 851-9651-3337, Yogyakarta), nama persis permintaan user: "Paket Sembako 250.000 mP" dst.
+    83→- Seed dijalankan: bunx tsx prisma/seed-beranda.ts --force -> 16 produk dibuat (video demo ikut di-seed ulang, call log dilewati)
+    84→- Verifikasi: tsc 0 error, lint bersih; E2E mobile 390x844: tab Sembako aktif, 4 kartu "SEMBAKO" gradasi merah, harga "250.000 mP"/"500.000 mP"/"750.000 mP"/"1.000.000 mP"; dialog Tambah Produk radio kategori: Makanan/Sembako/Fashion/Kerajinan/Jasa/Agro; desktop 1280x800: 4 kartu tampil; errors kosong, dev.log bersih
+    85→- Screenshot: upload/e2e-sembako-mobile.png, e2e-sembako-desktop.png
+    86→
+    87→Stage Summary:
+    88→- Kategori Sembako live di Marketplace (tab, form, API) dengan 4 paket sesuai permintaan; GET /api/market memfilter ?category=sembako langsung (tanpa whitelist — aman)
+    89→- Catatan: seed --force hanya menghapus & membuat ulang konten demo (MarketItem semua demo); tidak menyentuh Profile/user
+    90→
+    91→---
+    92→Task ID: 15
+    93→Agent: Z.ai Code (main)
+    94→Task: Perbaiki presisi tampilan mode mobile halaman Link Bisnis, Promosi, dan Verifikasi Bisnis
+    95→
+    96→Work Log:
+    97→- Diagnosis via agent-browser (viewport 390x844) + eval pengukuran: ketiga view punya (1) header internal ganda di bawah top bar AppShell, (2) grid blowout horizontal — LinkView grid.scrollWidth 944px (URL wa.me font-mono tak-wrap men-size track implisit `auto`), PromotionsView 539px (blok <pre> cuplikan kode ChatButtonCard tak-wrap); VerificationView hanya header ganda (grid aman)
+    98→- LinkView.tsx: header jadi `hidden md:flex` (h-14, bg-sidebar, ikon Link2 baru + subtitle, konsisten dgn view lain) — hanya desktop; grid `grid lg:grid-cols-5` → `grid grid-cols-1 lg:grid-cols-5` (minmax(0,1fr) memaksa track bisa menyusut); Card kiri & kolom kanan + `min-w-0`
+    99→- PromotionsView.tsx: header `hidden md:flex`; grid `grid grid-cols-1 items-start gap-4 md:grid-cols-2` — blok kode kini scroll internal via overflow-x-auto yang sudah ada
+   100→- VerificationView.tsx: dua header (state loading + main) `hidden md:flex`; grid manfaat + `grid-cols-1` (pencegahan)
+   101→- Verifikasi: tsc 0 error (file sendiri), lint bersih; E2E mobile 390x844 — main.scrollWidth 390 di ketiga halaman (0 overflow), tanpa header ganda; E2E desktop 1280x800 — header internal tetap tampil, layout 2/4 kolom normal
+   102→- Interaksi inti mobile: dialog Buat Iklan 358px tanpa overflow (format mP "150.000 mP/hari"), Ajukan Verifikasi → review nyata 8/9 kriteria + toast + badge "Verifikasi ditolak" (email profil belum valid — perilaku fungsional benar), Salin Link → toast "Link disalin ✅" + tombol berubah centang
+   103→- errors/console/dev.log bersih; Screenshot: upload/e2e-t15-before-link.png (before), e2e-t15-after-link.png, e2e-t15-after-promosi.png, e2e-t15-after-verif.png, e2e-t15-dialog-iklan.png, e2e-t15-verif-submit.png, e2e-t15-link-copy.png, e2e-t15-after-link-desktop.png, e2e-t15-after-promosi-desktop.png, e2e-t15-after-verif-desktop.png
+   104→
+   105→Stage Summary:
+   106→- Ketiga halaman kini presisi di mobile: satu header (top bar AppShell dgn judul view), konten pas viewport tanpa scroll horizontal, card terpotong rapi (truncate/ellipsis), blok kode scroll internal
+   107→- Akar masalah grid blowout (track implisit auto mengikuti min-content URL/pre tak-wrap) didokumentasikan di komentar kode — pola grid-cols-1 minmax(0,1fr) wajib utk grid satu kolom mobile
+   108→- Desktop tidak berubah fungsional; header LinkView dinormalisasi (ikon Link2, h-14, bg-sidebar) agar konsisten dgn Promosi/Verifikasi
+   109→
+   110→---
+   111→Task ID: 16
+   112→Agent: Z.ai Code (main)
+   113→Task: Sesuai 6 screenshot beranotasi — hapus header internal (kotak merah) & pindahkan elemen kotak biru ke pojok kanan panel header (mobile) pada Panggilan, Status, Channel, Komunitas, Katalog, Label Pelanggan
+   114→
+   115→Work Log:
+   116→- Analisis 6 anotasi (zoom crop utk verifikasi warna kotak): merah=hapus dari view, biru=pindah ke pojok top bar AppShell — Panggilan: header internal dihapus + Logo Panggilan (ikon telepon) ke pojok; Status: judul+refresh dihapus, "+ Tambah" ke pojok; Channel: header dihapus, "+ Buat Channel" ke pojok; Komunitas: judul dihapus, ikon komunitas ke pojok (logo); Katalog: judul+"+ Tambah Produk" dihapus (tetap ada di desktop & Marketplace), ikon katalog + keranjang ke pojok; Label: header dihapus, "+ Label Baru" ke pojok
+   117→- AppShell.tsx: tambah blok elemen pojok kanan top bar per view (mobile, header sudah md:hidden): span logo telepon (calls), span logo Users (community), Button "+ Tambah" (status, event wa:status:add), Button "+ Buat Channel" (channels, event wa:channels:create), logo ShoppingBag + <CartSheet/> (catalog), Button "+ Label Baru" (labels, event wa:labels:new); import CartSheet
+   118→- CallsView: kepala internal hidden md:block; StatusView: header hidden md:flex + listener wa:status:add→setCreateOpen; ChannelsView: header hidden md:flex + listener wa:channels:create; CommunityView: header hidden md:flex; CatalogView & LabelsView: ViewHeader dibungkus {isDesktop && ...} via hook baru src/lib/useIsDesktop.ts (matchMedia md/768px — selaras top bar md:hidden), LabelsView + listener wa:labels:new
+   119→- Verifikasi: tsc 0 error, lint bersih; E2E mobile 390x844 — 6 halaman tanpa header internal, elemen biru tampil di pojok kanan top bar; interaksi: Tambah Status dialog terbuka, Buat Channel dialog terbuka, Keranjang sheet terbuka, Label Baru dialog terbuka; E2E desktop 1280x800 — header internal Status/Katalog/Labels/Panggilan tetap tampil lengkap dengan aksi (Keranjang+Tambah Produk, Label Baru, refresh)
+   120→- errors/console/dev.log bersih; Screenshot: upload/e2e-t16-{calls,status,status-dialog,channel,channel-dialog,komunitas,katalog,katalog-cart,labels,labels-dialog}-png (mobile) + e2e-t16-{status,katalog,labels,calls}-desktop.png
+   121→
+   122→Stage Summary:
+   123→- 6 halaman kini konsisten dgn pola Task 12: mobile = satu top bar AppShell (judul view sbg subtitle) + logo/tombol aksi di pojok kanan; desktop = header internal utuh dgn semua aksi
+   124→- Hook useIsDesktop (md/768px) dipublikasikan di src/lib untuk view lain yg perlu pola sama
+   125→- Katalog mobile tanpa "+ Tambah Produk" sesuai kotak merah — penambahan produk tetap tersedia via Marketplace (top bar) & desktop
+   126→
+   127→---
+   128→Task ID: 17
+   129→Agent: Z.ai Code (main)
+   130→Task: Permintaan user — "Saya tidak ingin web app ini berubah dan kembali setingan awal" (bekukan perubahan, jaminan state tidak direset)
+   131→
+   132→Work Log:
+   133→- TIDAK ADA perubahan kode/data yang dilakukan pada task ini. Instruksi user: aplikasi tidak boleh berubah lagi & tidak boleh kembali ke setelan awal.
+   134→- Verifikasi kondisi terkini: dev.log bersih (semua GET /api/profile, /api/chats, /api/auth/me → 200, tanpa error); perbaikan Task 15 & 16 terverifikasi masih utuh di source (grep `hidden h-14 ... md:flex` ada di 6 view: Verification, Channels, Link, Community, Promotions)
+   135→- E2E agent-browser 390x844: login page (sesi browser baru — normal, BUKAN reset) → Masuk sebagai Super Admin → daftar chat lengkap 8 chat dgn data utuh (label BISNIS, pin, badge) → Profil tab Edit: logo IndiGoo, Nama bisnis "IndiGoo", Pemilik "PT. Indonesian Digital Goo", deskripsi — semua tersimpan
+   136→- Screenshot: upload/verify-state-1.png (login), verify-state-2.png (chat), verify-state-3.png (profil)
+   137→
+   138→Stage Summary:
+   139→- Status aplikasi: SEMUA pengaturan, data, dan perubahan sebelumnya (Task 1–16) utuh 100%. Tidak ada reset seed/db, tidak ada edit kode baru.
+   140→- KEBIJAKAN KE DEPAN (penting utk agent berikutnya): JANGAN jalankan ulang seed --force / db push reset / edit UI atau data TANPA permintaan eksplisit user. Kerjakan hanya apa yang diminta user.
+   141→- Catatan UX: halaman login yang muncul saat sesi baru adalah perilaku normal (cookie sesi habis) — BUKAN reset aplikasi; data tetap aman di database, user cukup login lagi.
+   142→
+   143→---
+   144→Task ID: 18
+   145→Agent: Z.ai Code (main)
+   146→Task: Fitur Terjemahan (bahasa lokal Indonesia: Sunda/Jawa/dll + bahasa asing) + Mode Hemat & Mode Gelap
+   147→
+   148→Work Log:
+   149→- API baru `src/app/api/translate/route.ts`: POST {text,target} → LLM (z-ai-web-dev-sdk, server-only, timeout 20s), whitelist bahasa via langNameOf, maks 1500 karakter, cache memori 300 entri (key target::text), respons {translation}
+   150→- `src/lib/translate-langs.ts`: 10 bahasa lokal (Sunda, Jawa, Indonesia, Madura, Minangkabau, Batak, Bali, Bugis, Aceh, Melayu) + 11 asing (Inggris, Arab, Mandarin, Jepang, Korea, Hindi, Spanyol, Prancis, Jerman, Thailand, Vietnam); DEFAULT_TRANSLATE_TARGET="su"
+   151→- `src/lib/display-prefs.ts`: zustand persist (localStorage "indigoo-display-prefs") utk lite + translateTarget; `DisplayPrefsSync.tsx` pasang kelas `.lite` di <html>, dimount di AppShell (AuthProvider)
+   152→- `theme-provider.tsx`: next-themes attribute="class" defaultTheme="light" enableSystem=false, dibungkus di layout.tsx (html sudah suppressHydrationWarning)
+   153→- globals.css: palet .dark diganti WhatsApp gelap (#0b141a/#111b21/#202c33/#233138/#2a3942, primary TETAP #00a884); override .dark utk .wa-chat-bg/.bubble-out(#005c4b)/.bubble-in(#202c33)/.wa-scrollbar; blok .lite (animasi/transisi 0.01ms, backdrop-filter none, .shadow-* none, pulse/ping/spin off — ring fokus TIDAK dimatikan)
+   154→- MessageBubble.tsx: menu pesan + item "Terjemahkan" (hanya utk pesan berisi teks), Dialog pilih bahasa (grid 2 kolom, grup Lokal/Asing, default ter-highlight), blok hasil terjemahan di dalam bubble (label bahasa + Loader2 saat proses + tombol tutup), runTranslate POST /api/translate; varian dark utk system bubble/ProductCard/ContactCard/DocCard/LocationCard/checkbox pilih
+   155→- SettingsView: tab ke-4 "Tampilan" (grid-cols-4) → SettingsDisplayTab: Switch Mode Gelap (next-themes, mounted via useSyncExternalStore — pola lint-react-hooks/set-state-in-effect aman), Switch Mode Hemat, Select bahasa tujuan (SelectGroup Lokal/Asing)
+   156→- AppShell: DisplayToggles di dasar drawer (Mode Gelap & Hemat dgn Check aktif, semua view), 2 item + separator di menu ⋮ (view chats), hooks useTheme+useDisplayPrefs di ShellInner
+   157→- BUG DITEMUKAN: Turbopack cache stale — edit appended CSS di globals.css tidak terkompilasi walau touch/full restart (blok .dark var masuk, aturan setelah .wa-story-ring di-drop senyap); FIX: rm -rf .next + restart dev
+   158→- Dark surface audit: 12+ kelas hardcoded light diberi dark: — ConversationPanel (canvas #0b141a, header #111b21, pill tanggal, lingkaran empty-state), Composer (bar #111b21, input #2a3942, pop quick-reply #233138), ChatListPanel (#111b21), ChatsView (wrapper #0b141a, panel #111b21, empty desktop), ChatInfoSheet (5 section dark:bg-secondary)
+   159→- Verifikasi: tsc 0 error, lint bersih; E2E mobile 390x844 — terjemahan nyata Sunda ("Tiasa?" utk ready) tampil di bubble; dialog bahasa lengkap; dark chat list+conversation+drawer+settings; lite on → html "light lite", layout utuh; desktop 1280x800 dark settings rapi; API curl: jv "barang wis dikirim dina iki", su "Barangna geus dikirimkeun" (cache hit cepat)
+   160→- Preferensi di-reset ke default (light, lite off, target su) setelah testing; Screenshot: upload/e2e-t18-{translate,dark,dark-chat,dark-fixed,dark-convo2,settings-dark,light-back,lite-home,dark-desktop}.png
+   161→
+   162→Stage Summary:
+   163→- 3 fitur baru live: (1) Terjemahan pesan chat ke 21 bahasa via LLM dgn cache, (2) Mode Gelap WhatsApp-malam penuh (mobile+desktop, persisten), (3) Mode Hemat (matikan animasi/blur/shadow, persisten)
+   164→- Akses toggle: drawer (semua view), menu ⋮ (chats), Pengaturan → Tampilan (lengkap + pilihan bahasa terjemahan)
+   165→- Pelajaran penting: kalau edit CSS globals.css tidak ter-apply walau dev server restart → rm -rf .next lalu start lagi (Turbopack cache invalidation gagal untuk append di akhir file CSS)
+   166→- Tidak ada perubahan database/schema; semua preferensi bersifat per-perangkat (localStorage)
+   167→
+   168→---
+   169→Task ID: 19
+   170→Agent: Z.ai Code (main)
+   171→Task: Buatkan halaman daftar (registrasi mandiri) dgn form ID Akses otomatis, username, PIN, password + Syarat & Ketentuan (min 2500 karakter), Privacy Policy (min 2500 karakter), dan Bantuan
+   172→
+   173→Work Log:
+   174→- Skema: kolom `pin` (String default "", scrypt hash) ditambah ke model User; `bun run db:push` ADDITIVE (tanpa reset — data chat/profil utuh 100%, sesuai kebijakan beku Task 17); akun seed otomatis pin="" (belum diset)
+   175→- Lib baru: `src/lib/access-id.ts` (nextAccessId — maks ID-xxxxxx + 1, satu rangkaian dgn pembuatan akun admin), `src/lib/legal-content.ts` (3 dokumen lengkap: Syarat & Ketentuan 8.582 karakter / Kebijakan Privasi 6.076 karakter / Bantuan 3.309 karakter — terverifikasi via script hitung karakter)
+   176→- API baru: GET `/api/auth/access-id` (pratinjau nomor otomatis) & POST `/api/auth/register` (validasi: username [a-z0-9_.]{3,24}, PIN tepat 6 angka, password 6–72, PIN ≠ password, wajib agree; ID Akses SELALU dibuat server; role USER; langsung set sesi cookie+Bearer)
+   177→- `use-auth.tsx`: helper `registerRequest()` baru (pola sama dgn loginRequest)
+   178→- UI: `RegisterScreen.tsx` baru (ID Akses read-only + tombol Buat ulang, lowercase live username, PIN numeric 6 digit, toggle lihat PIN/password, checkbox persetujuan + tautan dialog legal, panel sukses menampilkan ID Akses final); `LegalDocsDialog.tsx` baru (Dialog max-h-85vh scroll dgn isi dari legal-content); LoginScreen: tambah tombol "Daftar" bawah kartu (mode internal login↔register, AppShell TIDAK disentuh) + varian dark: pada gradient kedua layar
+   179→- BUG LAMA DIPERBAIKI (wajib utk fitur ini): login route `src/app/api/auth/login/route.ts` — ketik ID Akses persis kanonik (mis. "ID-000004") gagal karena cabang `{accessId: byAccess}` di-skip saat byAccess===rawId; fix: cabang accessId selalu disertakan. Login via ID-xxxxxx, angka pendek (4), username, dan akun demo — semua dites OK via curl
+   180→- Masalah teknis dev server: Prisma Client lama di memori proses dev (kolom pin tak dikenal → 500 register); restart dev server biasa (nohup/setsid dari tool bash) MATI antar-invokasi; FIX: spawn langsung `./node_modules/.bin/next dev -p 3000` via bun child_process detached+unref → jadi orphan diadopsi PID 1 (pola sama dgn mini service) → persisten. Pelajaran: bila perlu restart dev server permanen, jangan pipe tee; pakai spawn detached stdio ke file
+   181→- Verifikasi: tsc 0 error, lint bersih; curl: register sukses, duplikat username ditolak, PIN=password ditolak, PIN pendek ditolak, tanpa agree ditolak, login 4 jalur OK; akun uji curl dihapus
+   182→- E2E agent-browser mobile 390x844: login → Daftar → form lengkap dgn ID-000004 otomatis → dialog S&K (8.684 char render) / Privasi (6.181) / Bantuan (3.433) semua terbuka+scroll OK → submit tanpa agree muncul pesan error → username "Budi.Santoso" otomatis lowercase → centang + Daftar → panel sukses "ID-000004" → Masuk ke aplikasi → masuk chat (8 chat utuh) → Keluar → login via "ID-000004"+password sukses → Super Admin → Manajemen Pengguna menampilkan budi.santoso; tanpa overflow (390=390), console bersih
+   183→- E2E desktop 1280x800 + dark mode: register light & dark rapi (html class "dark"), dialog scroll 3596px OK
+   184→- Screenshot: upload/e2e-t19-1..12 (login-daftar, dialog-syarat, dialog-privasi, dialog-bantuan, validasi-agree, sukses-daftar, app-sebagai-user, login-via-id-akses, admin-users, register-desktop, register-dark, register-dark-benar)
+   185→
+   186→Stage Summary:
+   187→- Halaman Daftar live: ID Akses otomatis (server-generated, tak bisa dipilih), username unik, PIN 6 angka (hash scrypt), password; wajib setuju S&K+Privasi; sukses → otomatis masuk sebagai Pengguna
+   188→- Dokumen legal lengkap jauh di atas ambang 2500 karakter: S&K 8.582, Privasi 6.076, plus Bantuan 3.309 — tersedia dari halaman Daftar (dan tautan di form)
+   189→- Akun demo hasil pendaftaran nyata tersisa utk user: budi.santoso / ID-000004 / PIN 135790 / password rahasia456 (muncul di Manajemen Pengguna)
+   190→- Satu-satunya perubahan pada file lama: kolom pin (schema), helper registerRequest (use-auth), tombol Daftar + gradient dark (LoginScreen), fix 1 baris lookup accessId (login route) — semuanya esensial utk fitur ini; AppShell & view lain TIDAK disentuh
+   191→- Dev server kini berjalan sebagai proses detached (PID diadopsi PID 1) — log ke dev.log via redirect langsung
+   192→
+   193→---
+   194→Task ID: 20
+   195→Agent: Z.ai Code (main)
+   196→Task: Jadikan perataan kiri-kanan (justify) pada Syarat & Ketentuan, Privacy Policy, Bantuan, Deskripsi (diprofil), Alamat (diprofil)
+   197→
+   198→Work Log:
+   199→- LegalDocsDialog.tsx: class `text-justify` ditambah ke intro, semua paragraf bagian, dan semua butir list (heading tetap rata kiri)
+   200→- BusinessProfileView.tsx: `text-justify` pada tampilan Deskripsi (paragraf whitespace-pre-wrap) dan Alamat di tab Pratinjau — kolom Edit tidak diubah
+   201→- Verifikasi: tsc 0 error, lint bersih; E2E — tab Pratinjau Profil memuat 2 elemen .text-justify (Deskripsi "IndiGoo adalah platform digital…" + Alamat "Jl. Kramat Pulo Gundul…"); dialog Syarat & Ketentuan memuat 31 elemen justify (Privasi & Bantuan memakai komponen sama); tanpa error di dev.log
+   202→- Screenshot: upload/e2e-t20-1-profil-justify.png (tab edit, sebelum), e2e-t20-2-pratinjau-justify.png (Pratinjau justify), e2e-t20-3-dialog-justify.png (S&K justify)
+   203→
+   204→Stage Summary:
+   205→- 5 target rata kiri-kanan selesai: S&K, Kebijakan Privasi, Bantuan (dialog), Deskripsi & Alamat Profil (Pratinjau); hanya 2 file disentuh, tanpa perubahan data
+   206→
+   207→---
+   208→Task ID: 21
+   209→Agent: Z.ai Code (main)
+   210→Task: Sesuai 6 screenshot beranotasi (8-13) — hapus garis kotak merah & pindahkan garis kotak biru ke pojok panel header (mobile) pada Siaran, Pesan Otomatis, Statistik Pesan, Perangkat Tertaut, Pengaturan, Manajemen Pengguna
+   211→
+   212→Work Log:
+   213→- Analisis 6 anotasi: merah = hapus blok judul+subjudul internal view (mobile), biru = pindah ke pojok kanan top bar AppShell — Siaran: header dihapus + logo megaphone ke pojok; Pesan Otomatis: header dihapus + logo bot ke pojok; Statistik Pesan: header dihapus + tombol refresh ke pojok (kotak biru di Screenshot 10 menandai posisi tujuan pojok); Perangkat Tertaut: header dihapus + tombol "+ Tautkan Perangkat" ke pojok; Pengaturan: header dihapus + logo gerigi ke pojok; Manajemen Pengguna: baris judul+subtitle+tombol Tambah dihapus (kotak merah mencakup tombol Tambah — preseden Katalog Task 16), logo UserCog ke pojok; chip statistik peran & pencarian TETAP tampil (di luar kotak merah)
+   214→- AppShell.tsx: 6 blok pojok kanan top bar baru (broadcast=span Megaphone, autoreplies=span Bot, stats=Button ghost RefreshCw → event wa:stats:refresh, devices=Button "+ Tautkan Perangkat" → event wa:devices:link, settings=span Settings, users=span UserCog) + import RefreshCw; pola identik Task 16
+   215→- BroadcastView/AutoRepliesView: ViewHeader diberi className="hidden md:flex" (twMerge menimpa flex bawaan)
+   216→- StatsView & DevicesView: header internal "hidden md:flex" + useEffect listener event (wa:stats:refresh → load(), wa:devices:link → setLinkOpen(true))
+   217→- SettingsView: header "hidden md:flex"; UsersView: baris judul saja "hidden md:flex" (chips+search tetap)
+   218→- Verifikasi: tsc 0 error di src/, lint bersih; E2E mobile 390x844 — 6 halaman tanpa header internal, elemen biru di pojok kanan top bar, subtitle top bar otomatis menampilkan nama view; interaksi: tombol refresh → 2× GET /api/stats 200, tombol Tautkan Perangkat → dialog QR terbuka; E2E desktop 1280x800 — 6 header internal utuh lengkap dgn aksi (refresh, Tautkan, Tambah)
+   219→- errors/console/dev.log bersih; Screenshot: upload/e2e-t21-1..6 (mobile: siaran, autoreplies, stats, devices, devices-dialog, users) + e2e-t21-7..12 (desktop: users, siaran, autoreplies, stats, devices, settings)
+   220→
+   221→Stage Summary:
+   222→- 6 halaman kini konsisten dgn pola Task 16: mobile = satu top bar AppShell (judul view sbg subtitle) + ikon/tombol di pojok kanan; desktop = header internal utuh dgn semua aksi
+   223→- Konsekuensi sesuai anotasi: mobile Manajemen Pengguna tanpa tombol "+ Tambah" (penambahan akun tetap tersedia di desktop); mobile Statistik tetap bisa refresh via pojok; mobile Perangkat tetap bisa menautkan via pojok
+   224→- Tanpa perubahan database/schema/API; hanya presentasi UI mobile
+   225→
+   226→---
+   227→Task ID: 22
+   228→Agent: Z.ai Code (main)
+   229→Task: Permintaan user — "Bagaimana cara menghapus Riwayat Panggilan dan melihat daftar kontak" → membangun 2 fitur yang belum ada: (1) hapus riwayat panggilan, (2) halaman daftar kontak
+   230→
+   231→Work Log:
+   232→- Audit: CallsView tidak punya aksi hapus & API /api/calls hanya GET/POST; API /api/contacts ada tapi UI daftar kontak tidak ada (hanya picker di dialog Chat Baru)
+   233→- API baru: DELETE /api/calls (bersihkan semua, return jumlah terhapus) + file baru /api/calls/[id]/route.ts (hapus satu, 404 jika tidak ada)
+   234→- CallsView: menu ⋮ per baris dgn "Hapus dari riwayat" (optimistic remove + toast); tombol "Bersihkan riwayat" (merah) di header desktop (hanya saat ada entri); ConfirmDialog konfirmasi bersihkan semua; listener event wa:calls:clear
+   235→- AppShell: pojok kanan top bar view Panggilan (mobile) diubah dari logo statis jadi DropdownMenu (visual sama — lingkaran logo telepon) berisi item "Bersihkan riwayat" → dispatch wa:calls:clear; NAV + ViewId + VIEWS "contacts" (label Kontak, ikon BookUser, grup Komunikasi setelah Panggilan); render khusus ContactsView dgn onNavigate; pojok kanan Kontak = logo BookUser; import BookUser/Trash2
+   236→- ContactsView (file baru): ViewHeader hidden md:flex (pola Task 16/21), pencarian nama/nomor/status (mobile+desktop), daftar kontak (avatar, nama, badge Diblokir, nomor, about, lastSeen di desktop), klik baris / tombol chat → POST /api/chats (dedupe bawaan API) → toast → onNavigate("chats"); kontak diblokir tidak bisa dikirim pesan (toast penjelasan); EmptyState utk kosong/tidak cocok; skeleton loading
+   237→- Verifikasi: tsc 0 error di src, lint bersih; E2E mobile 390x844 — hapus 1 panggilan (7→6, toast), menu pojok → dialog konfirmasi → bersihkan (6 entri, empty state), halaman Kontak (11 kontak, pencarian "maya" → 1 hasil), klik Maya Putri → toast + navigasi ke Chat; E2E desktop 1280x800 — tombol "Bersihkan riwayat" di header + konfirmasi (2 entri curl dihapus), header internal Kontak utuh
+   238→- TEMUAN DATA (bukan bug kode): 8 chat aktif demo terhapus via UI (9× DELETE /api/chats/[id] 200 di dev.log — baris 686-742 terjadi SEBELUM sesi E2E saya; 1× lagi di baris 6364 dari sesi browser paralel; pola = klik manual UI, bukan skrip saya). Yang tersisa: arsip "Rudi Hartono" utuh (3 pesan), 11 kontak utuh, akun utuh. File backup db/backups/backup-cmvq3hlfq3ff8072cb852030a.json (27 Okt 02:57) tersedia + fitur /api/account/restore utk pemulihan bila diminta user (kebijakan Task 17: tidak auto-restore tanpa izin)
+   239→- errors/dev.log bersih dari error runtime; Screenshot: upload/e2e-t22-1..14 (calls mobile+menu+hapus+konfirmasi+bersih, kontak mobile+cari+chat, desktop calls/kontak/bersih)
+   240→
+   241→Stage Summary:
+   242→- 2 fitur baru live: (1) Hapus riwayat panggilan — per-entri via menu ⋮ baris, bersihkan semua via tombol header (desktop) / menu logo pojok (mobile), semua dgn konfirmasi; (2) Halaman "Kontak" di nav Komunikasi — daftar lengkap + pencarian + kirim pesan langsung ke chat
+   243→- Kontak bisa diakses: drawer mobile (Komunikasi → Kontak) & rail desktop (ikon buku kontak)
+   244→- Data chat demo terhapus via UI sebelum sesi ini (kemungkinan oleh user yang sedang eksplorasi) — menunggu konfirmasi user utk restore dari backup
+   245→
+   246→---
+   247→Task ID: 23
+   248→Agent: Z.ai Code (main)
+   249→Task: Permintaan user — "Ganti dengan Logo/Icon/Simbol setiap tombol dan Icon + yang terletak dipojok kanan pada panel header" → semua tombol teks di pojok kanan top bar (mobile) diubah menjadi ikon murni
+   250→
+   251→Work Log:
+   252→- Audit AppShell.tsx: dari 16 blok pojok kanan top bar, masih 5 tombol teks (Plus + label) + 1 tombol ghost — Marketplace "Tambah Produk", Status "Tambah", Channel "Buat Channel", Label "Label Baru", Perangkat "Tautkan Perangkat", Statistik "Muat ulang" (ghost RefreshCw); sisanya sudah ikon (⋮ chat, phone Panggilan, BookUser Kontak, Users Komunitas, ShoppingBag Katalog, Megaphone Siaran, Bot AutoReplies, Settings, UserCog)
+   253→- Konversi 6 elemen jadi tombol ikon murni seragam gaya badge: h-9 w-9 rounded-xl bg-primary/10 + ikon h-5 w-5 text-primary + hover:bg-primary/20 active:bg-primary/30 + focus-visible ring (konsisten dgn trigger Panggilan); semua ikon Plus dipertahankan utk aksi tambah, RefreshCw utk statistik; aria-label dipertahankan (Tambah produk marketplace / Tambah status / Buat channel / Tambah label baru / Tautkan perangkat / Muat ulang statistik)
+   254→- Komentar kode blok pojok diperbarui (menyebut Task 22/23: ikon murni tanpa teks)
+   255→- Verifikasi: tsc 0 error di src, lint bersih; E2E mobile 390x844 — 6 ikon tampil tanpa teks & fungsional: Marketplace → dialog "Tambah Produk" terbuka, Status → dialog "Tambah Status", Channel → dialog "Buat Channel", Label → dialog "Label Baru", Statistik → klik ikon refresh = GET /api/stats 200 (2x: load+refresh), Perangkat → dialog "Tautkan Perangkat"; console hanya warning Radix aria-describedby pre-existing, 0 error
+   256→- E2E desktop 1280x800 — header internal view TETAP UTUH dgn tombol teks lengkap ("Tautkan Perangkat", "Tambah", "Buat Channel", "Label Baru") — perubahan hanya mobile sesuai permintaan; dev.log bersih
+   257→- Screenshot: upload/e2e-t23-1..7 (marketplace/status/channel/labels/stats/devices mobile + desktop devices)
+   258→
+   259→Stage Summary:
+   260→- Pojok kanan top bar (mobile) kini 100% Logo/Icon/Simbol untuk SEMUA view — tak ada lagi tombol berteks; bahasa visual seragam (badge rounded-xl bg-primary/10)
+   261→- Semua aksi tetap berfungsi persis seperti sebelumnya (dialog & event dispatch tak diubah); desktop tidak tersentuh

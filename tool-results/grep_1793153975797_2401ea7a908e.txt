@@ -1,0 +1,252 @@
+/home/z/my-project/src/components/views/DevicesView.tsx:177:                <ul className="px-2 pb-2" aria-label="Daftar perangkat tertaut">
+/home/z/my-project/src/components/views/DevicesView.tsx:219:                            aria-label={dev.current ? `Keluarkan perangkat ini (${dev.name})` : `Keluar dari perangkat ${dev.name}`}
+/home/z/my-project/src/components/views/UsersView.tsx:190:            aria-label="Cari pengguna"
+/home/z/my-project/src/components/views/UsersView.tsx:197:      <div className="flex-1 min-h-0 overflow-y-auto wa-scrollbar p-3 pb-8" role="list" aria-label="Daftar pengguna">
+/home/z/my-project/src/components/views/UsersView.tsx:267:                      aria-label={`Edit ${u.name || u.username}`}
+/home/z/my-project/src/components/views/UsersView.tsx:276:                      aria-label={u.active ? `Nonaktifkan ${u.name || u.username}` : `Aktifkan ${u.name || u.username}`}
+/home/z/my-project/src/components/views/UsersView.tsx:286:                      aria-label={`Hapus ${u.name || u.username}`}
+/home/z/my-project/src/components/views/UsersView.tsx:474:            <div className="grid gap-1.5" role="radiogroup" aria-label="Peran pengguna">
+/home/z/my-project/src/components/views/UsersView.tsx:522:                aria-label="Status aktif akun"
+/home/z/my-project/src/components/views/MarketplaceView.tsx:214:            aria-label="Cari produk marketplace"
+/home/z/my-project/src/components/views/MarketplaceView.tsx:219:        <div className="flex gap-1.5 overflow-x-auto wa-scrollbar pt-3 pb-1" role="tablist" aria-label="Kategori marketplace">
+/home/z/my-project/src/components/views/MarketplaceView.tsx:304:                      aria-label={`Tanya penjual ${item.sellerName}`}
+/home/z/my-project/src/components/views/MarketplaceView.tsx:315:                          aria-label={`Edit produk ${item.name}`}
+/home/z/my-project/src/components/views/MarketplaceView.tsx:327:                          aria-label={`Hapus produk ${item.name}`}
+/home/z/my-project/src/components/views/MarketplaceView.tsx:467:            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Kategori produk">
+/home/z/my-project/src/components/views/CatalogView.tsx:183:            aria-label="Cari produk"
+/home/z/my-project/src/components/views/CatalogView.tsx:187:          <SelectTrigger className="w-full sm:w-56 h-9" aria-label="Filter koleksi">
+/home/z/my-project/src/components/views/CatalogView.tsx:272:                        aria-label={`Menu produk ${p.name}`}
+/home/z/my-project/src/components/views/CatalogView.tsx:305:                      <Switch checked={p.available} onCheckedChange={() => toggleAvailable(p)} aria-label={`Tersedia: ${p.name}`} />
+/home/z/my-project/src/components/views/CatalogView.tsx:312:                        aria-label={`Tambah ${p.name} ke keranjang`}
+/home/z/my-project/src/components/views/VerificationView.tsx:271:        <div className="flex-1 overflow-y-auto wa-scrollbar p-4 md:p-6" aria-busy="true" aria-label="Memuat verifikasi">
+/home/z/my-project/src/components/views/VerificationView.tsx:302:          <section aria-label="Status verifikasi">
+/home/z/my-project/src/components/views/VerificationView.tsx:341:                        aria-label="Perlindungan merek aktif"
+/home/z/my-project/src/components/views/VerificationView.tsx:392:                <ul className="space-y-2.5" aria-label="Detail kriteria verifikasi">
+/home/z/my-project/src/components/views/VerificationView.tsx:416:              aria-label="Langkah perbaikan"
+/home/z/my-project/src/components/views/VerificationView.tsx:463:          <section aria-label="Riwayat pengajuan" className="space-y-3">
+/home/z/my-project/src/components/views/VerificationView.tsx:524:          <section aria-label="Manfaat verifikasi" className="space-y-3">
+/home/z/my-project/src/components/views/VerificationView.tsx:539:              <section aria-label="Pengaturan setelah verifikasi" className="space-y-4">
+/home/z/my-project/src/components/views/VerificationView.tsx:554:                      aria-label="Aktifkan Perlindungan Merek"
+/home/z/my-project/src/components/views/ChannelsView.tsx:83:            {channel.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Channel terverifikasi" /> : null}
+/home/z/my-project/src/components/views/ChannelsView.tsx:143:            {channel.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Channel terverifikasi" /> : null}
+/home/z/my-project/src/components/views/ChannelsView.tsx:187:          {channel.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Channel terverifikasi" /> : null}
+/home/z/my-project/src/components/views/ChannelsView.tsx:193:      <Button size="sm" className="shrink-0" onClick={() => onFollow(channel)} disabled={busy} aria-label={`Ikuti ${channel.name}`}>
+/home/z/my-project/src/components/views/ChannelsView.tsx:350:            <div className="space-y-4" aria-busy="true" aria-label="Memuat channel">
+/home/z/my-project/src/components/views/ContactsView.tsx:103:            aria-label="Cari kontak"
+/home/z/my-project/src/components/views/ContactsView.tsx:110:      <div className="flex-1 min-h-0 overflow-y-auto wa-scrollbar pb-8" role="list" aria-label="Daftar kontak">
+/home/z/my-project/src/components/views/ContactsView.tsx:150:                aria-label={`Lihat detail atau kirim pesan ke ${c.name}`}
+/home/z/my-project/src/components/views/ContactsView.tsx:170:                aria-label={`Kirim pesan ke ${c.name}`}
+/home/z/my-project/src/components/views/StatsView.tsx:121:        <Button variant="ghost" size="icon" onClick={load} aria-label="Muat ulang statistik" className="ml-auto h-9 w-9">
+/home/z/my-project/src/components/views/StatsView.tsx:129:        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" role="list" aria-label="Ringkasan pesan">
+/home/z/my-project/src/components/views/StatsView.tsx:161:              <div className="h-72 w-full" role="img" aria-label="Grafik tren pesan harian 14 hari terakhir">
+/home/z/my-project/src/components/views/StatsView.tsx:209:                <div className="h-64 w-full" role="img" aria-label="Grafik jumlah pesan per jenis">
+/home/z/my-project/src/components/views/StatsView.tsx:248:                <ol className="space-y-4 py-1" aria-label="Daftar chat teratas">
+/home/z/my-project/src/components/views/StatsView.tsx:262:                        aria-label={`${c.name}: ${c.count} pesan`}
+/home/z/my-project/src/components/views/AutoRepliesView.tsx:249:                    <Switch checked={storeOpen} onCheckedChange={(v) => setAuto({ ...auto, storeOpen: v })} aria-label="Status toko buka atau tutup" className="scale-125" />
+/home/z/my-project/src/components/views/AutoRepliesView.tsx:281:                      <Switch id="greet-enable" checked={auto.greetingEnabled} onCheckedChange={(v) => setAuto({ ...auto, greetingEnabled: v })} aria-label="Aktifkan pesan sambutan" />
+/home/z/my-project/src/components/views/AutoRepliesView.tsx:320:                      <Switch id="away-enable" checked={auto.awayEnabled} onCheckedChange={(v) => setAuto({ ...auto, awayEnabled: v })} aria-label="Aktifkan pesan luar jam kerja" />
+/home/z/my-project/src/components/views/AutoRepliesView.tsx:397:                              aria-label={`Edit balasan cepat ${qr.shortcut}`}
+/home/z/my-project/src/components/views/AutoRepliesView.tsx:409:                              aria-label={`Hapus balasan cepat ${qr.shortcut}`}
+/home/z/my-project/src/components/views/BerandaView.tsx:206:        aria-label="Kategori video"
+/home/z/my-project/src/components/views/BerandaView.tsx:232:              <Loader2 className="h-8 w-8 text-white/50 animate-spin" aria-label="Memuat video" />
+/home/z/my-project/src/components/views/BerandaView.tsx:366:        aria-label={`Video: ${video.title}`}
+/home/z/my-project/src/components/views/BerandaView.tsx:374:          aria-label="Putar video"
+/home/z/my-project/src/components/views/BerandaView.tsx:387:        aria-label={muted ? "Nyalakan suara" : "Bisukan suara"}
+/home/z/my-project/src/components/views/BerandaView.tsx:398:          aria-label={liked ? "Batal suka" : "Suka video"}
+/home/z/my-project/src/components/views/BerandaView.tsx:410:          aria-label="Bagikan video"
+/home/z/my-project/src/components/views/BerandaView.tsx:423:              aria-label="Edit video"
+/home/z/my-project/src/components/views/BerandaView.tsx:434:              aria-label="Hapus video"
+/home/z/my-project/src/components/views/BerandaView.tsx:452:          aria-label={`Lihat penjual ${video.authorName}`}
+/home/z/my-project/src/components/views/BerandaView.tsx:458:          {video.isFollowing && <UserCheck className="h-3.5 w-3.5 text-emerald-300" aria-label="Diikuti" />}
+/home/z/my-project/src/components/views/BerandaView.tsx:459:          {video.isFollower && <Users className="h-3.5 w-3.5 text-sky-300" aria-label="Pengikut" />}
+/home/z/my-project/src/components/views/BerandaView.tsx:592:            <div className="flex gap-1.5" role="radiogroup" aria-label="Kategori video">
+/home/z/my-project/src/components/views/BerandaView.tsx:688:            <div className="flex gap-1.5" role="radiogroup" aria-label="Kategori video">
+/home/z/my-project/src/components/views/LinkView.tsx:185:                  <Button onClick={copyLink} disabled={!link} aria-label="Salin link">
+/home/z/my-project/src/components/views/LinkView.tsx:189:                  <Button variant="outline" onClick={() => openLink(link)} disabled={!link} aria-label="Uji link di tab baru">
+/home/z/my-project/src/components/views/LinkView.tsx:207:                    aria-label="Bagikan lewat WhatsApp"
+/home/z/my-project/src/components/views/LinkView.tsx:216:                    aria-label="Bagikan lewat Facebook"
+/home/z/my-project/src/components/views/LinkView.tsx:229:                    aria-label="Bagikan lewat X"
+/home/z/my-project/src/components/views/LinkView.tsx:250:                    <Loader2 className="h-8 w-8 animate-spin text-primary" aria-label="Membuat QR" />
+/home/z/my-project/src/components/views/LinkView.tsx:258:                  <a href={qr || undefined} download="qr-wa-toko-berkah-jaya.png" aria-label="Unduh QR Code">
+/home/z/my-project/src/components/views/CommunityView.tsx:111:          aria-label="Isi pengumuman komunitas"
+/home/z/my-project/src/components/views/CommunityView.tsx:169:          aria-label="Isi pengumuman grup"
+/home/z/my-project/src/components/views/CommunityView.tsx:364:                    aria-label={`Kirim pengumuman ke grup ${g.name}`}
+/home/z/my-project/src/components/views/CommunityView.tsx:439:            <div className="space-y-4" aria-busy="true" aria-label="Memuat komunitas">
+/home/z/my-project/src/components/views/StatusView.tsx:64:        <Button variant="ghost" size="icon" onClick={load} aria-label="Muat ulang status" className="h-9 w-9">
+/home/z/my-project/src/components/views/StatusView.tsx:73:      <div className="flex-1 overflow-y-auto wa-scrollbar" role="list" aria-label="Daftar status">
+/home/z/my-project/src/components/views/StatusView.tsx:91:              aria-label={`Lihat status saya, ${data.mine.length} status, ${totalMyViews} tayangan`}
+/home/z/my-project/src/components/views/StatusView.tsx:114:              aria-label="Ketuk untuk tambah status"
+/home/z/my-project/src/components/views/StatusView.tsx:159:                  aria-label={`Lihat status dari ${c.name}, ${c.stories.length} status`}
+/home/z/my-project/src/components/views/BusinessProfileView.tsx:437:                    aria-label={`Buka atau tutup pada hari ${row.day}`}
+/home/z/my-project/src/components/views/BusinessProfileView.tsx:448:                    aria-label={`Jam buka hari ${row.day}`}
+/home/z/my-project/src/components/views/BusinessProfileView.tsx:457:                    aria-label={`Jam tutup hari ${row.day}`}
+/home/z/my-project/src/components/views/LabelsView.tsx:122:              <SelectTrigger aria-label="Pilih warna label">
+/home/z/my-project/src/components/views/LabelsView.tsx:198:          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama / nomor kontak..." className="pl-9 h-9" aria-label="Cari kontak" />
+/home/z/my-project/src/components/views/LabelsView.tsx:213:                    aria-label={`Beri label ${label.name} pada ${c.name}`}
+/home/z/my-project/src/components/views/LabelsView.tsx:290:                    aria-label={`Label ${l.name} untuk ${contact.name}`}
+/home/z/my-project/src/components/views/LabelsView.tsx:434:            <section aria-label="Daftar label">
+/home/z/my-project/src/components/views/LabelsView.tsx:466:                      aria-label={`Kelola label ${l.name}`}
+/home/z/my-project/src/components/views/LabelsView.tsx:479:                              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Menu label ${l.name}`}>
+/home/z/my-project/src/components/views/LabelsView.tsx:509:            <section aria-label="Kelola kontak">
+/home/z/my-project/src/components/views/LabelsView.tsx:525:                        aria-label="Cari kontak"
+/home/z/my-project/src/components/views/LabelsView.tsx:561:                          <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => setAssignContact(c)} aria-label={`Ubah label ${c.name}`}>
+/home/z/my-project/src/components/views/BroadcastView.tsx:55:      <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-muted" role="img" aria-label={`Statistik siaran: ${segs.map((s) => `${s.label} ${s.count}`).join(", ")}`}>
+/home/z/my-project/src/components/views/BroadcastView.tsx:123:                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Menu siaran ${b.name}`}>
+/home/z/my-project/src/components/views/BroadcastView.tsx:315:                  <SelectTrigger aria-label="Pilih audiens siaran" className="w-full sm:w-72">
+/home/z/my-project/src/components/views/BroadcastView.tsx:340:                      aria-label="Hapus gambar siaran"
+/home/z/my-project/src/components/views/BroadcastView.tsx:374:          <section aria-label="Riwayat siaran" className="space-y-3">
+/home/z/my-project/src/components/views/CallsView.tsx:130:      <PhoneMissed className="h-3.5 w-3.5 text-red-500" aria-label="Tak terjawab" />
+/home/z/my-project/src/components/views/CallsView.tsx:132:      <PhoneIncoming className="h-3.5 w-3.5 text-emerald-500" aria-label="Masuk" />
+/home/z/my-project/src/components/views/CallsView.tsx:134:      <PhoneOutgoing className="h-3.5 w-3.5 text-sky-500" aria-label="Keluar" />
+/home/z/my-project/src/components/views/CallsView.tsx:164:      <div className="flex-1 min-h-0 overflow-y-auto wa-scrollbar pb-8" role="list" aria-label="Riwayat panggilan">
+/home/z/my-project/src/components/views/CallsView.tsx:207:                aria-label={`Panggil ulang ${c.contactName} via ${c.kind === "VIDEO" ? "video" : "suara"}`}
+/home/z/my-project/src/components/views/CallsView.tsx:223:                  <Button variant="ghost" size="icon" className="shrink-0" aria-label={`Menu panggilan ${c.contactName}`}>
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:521:          aria-label="Kembali ke daftar chat"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:529:          aria-label={`Info ${chat.name}`}
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:537:                  <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" aria-label="Chat bisnis" />
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:549:              {chat.favorite && <Heart className="h-3 w-3 text-rose-500 fill-rose-500 shrink-0" aria-label="Favorit" />}
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:563:              aria-label="Tambah ke daftar"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:598:              aria-label="Panggilan video"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:606:                <Button variant="ghost" size="icon" aria-label="Opsi panggilan" className="rounded-l-none px-0.5 -ml-1">
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:629:          aria-label="Cari di obrolan"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:643:            <Button variant="ghost" size="icon" aria-label="Menu obrolan" className="shrink-0">
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:773:            aria-label="Cari pesan dalam obrolan"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:785:            aria-label="Tutup pencarian"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:804:            aria-label="Hapus pesan terpilih"
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:816:          <Button variant="ghost" size="icon" aria-label="Batal pilih pesan" onClick={exitSelect}>
+/home/z/my-project/src/components/chat/ConversationPanel.tsx:829:        aria-label={`Percakapan dengan ${chat.name}`}
+/home/z/my-project/src/components/chat/CallDialog.tsx:452:      aria-label={`${isVideo ? "Panggilan video" : "Panggilan suara"} dengan ${contactName}`}
+/home/z/my-project/src/components/chat/CallDialog.tsx:461:          aria-label={`Video dari ${contactName}`}
+/home/z/my-project/src/components/chat/CallDialog.tsx:564:            aria-label="Video Anda"
+/home/z/my-project/src/components/chat/CallDialog.tsx:580:            aria-label={micOn ? "Bisukan mikrofon" : "Nyalakan mikrofon"}
+/home/z/my-project/src/components/chat/CallDialog.tsx:591:              aria-label={camOn ? "Matikan kamera" : "Nyalakan kamera"}
+/home/z/my-project/src/components/chat/CallDialog.tsx:602:            aria-label="Akhiri panggilan"
+/home/z/my-project/src/components/extras/RegisterScreen.tsx:105:        <main className="w-full max-w-sm" aria-label="Pendaftaran berhasil">
+/home/z/my-project/src/components/extras/RegisterScreen.tsx:130:      <main className="w-full max-w-sm" aria-label="Formulir pendaftaran">
+/home/z/my-project/src/components/extras/RegisterScreen.tsx:164:                  aria-label="Buat ulang ID Akses otomatis"
+/home/z/my-project/src/components/extras/RegisterScreen.tsx:224:                  aria-label={showPin ? "Sembunyikan PIN" : "Tampilkan PIN"}
+/home/z/my-project/src/components/extras/RegisterScreen.tsx:250:                  aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+/home/z/my-project/src/components/extras/RegisterScreen.tsx:268:                aria-label="Saya menyetujui Syarat & Ketentuan dan Kebijakan Privasi"
+/home/z/my-project/src/components/chat/ChatInfoSheet.tsx:199:                aria-label={blocked ? "Buka blokir kontak" : "Blokir kontak"}
+/home/z/my-project/src/components/extras/SettingsPrivacyTab.tsx:210:                  <SelectTrigger className="w-36" aria-label={f.title}>
+/home/z/my-project/src/components/extras/SettingsPrivacyTab.tsx:241:              aria-label="Tanda pesan dibaca"
+/home/z/my-project/src/components/extras/SettingsPrivacyTab.tsx:253:              aria-label="Verifikasi dua langkah"
+/home/z/my-project/src/components/extras/SettingsPrivacyTab.tsx:265:              aria-label="Blokir pesan dari nomor tak dikenal"
+/home/z/my-project/src/components/extras/SettingsPrivacyTab.tsx:295:            <ul className="max-h-96 overflow-y-auto wa-scrollbar divide-y divide-border" aria-label="Daftar kontak diblokir">
+/home/z/my-project/src/components/extras/SettingsPrivacyTab.tsx:316:                    aria-label={`Buka blokir ${c.name}`}
+/home/z/my-project/src/components/extras/CreateStatusDialog.tsx:177:                    aria-label={`Warna ${b.label}`}
+/home/z/my-project/src/components/extras/CreateStatusDialog.tsx:196:              aria-label="Pilih foto untuk status"
+/home/z/my-project/src/components/extras/CreateStatusDialog.tsx:214:              aria-label="Unggah foto status"
+/home/z/my-project/src/components/extras/CreateSheet.tsx:155:          <Button variant="ghost" size="icon" className="-ml-2 h-7 w-7" onClick={onBack} aria-label="Kembali">
+/home/z/my-project/src/components/extras/CreateSheet.tsx:262:          <Button variant="ghost" size="icon" className="-ml-2 h-7 w-7" onClick={onBack} aria-label="Kembali">
+/home/z/my-project/src/components/extras/CreateSheet.tsx:319:          <div className="flex gap-1.5" role="radiogroup" aria-label="Kategori video">
+/home/z/my-project/src/components/extras/LoginScreen.tsx:57:      <main className="w-full max-w-sm" aria-label="Formulir masuk">
+/home/z/my-project/src/components/extras/LoginScreen.tsx:109:                  aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+/home/z/my-project/src/components/extras/LoginScreen.tsx:144:                  aria-label={`Masuk sebagai ${ROLE_LABEL[acc.role]}`}
+/home/z/my-project/src/components/chat/IncomingCallCenter.tsx:280:          aria-label={`${isVideoRing ? "Panggilan video" : "Panggilan suara"} masuk dari ${ring.contactName}`}
+/home/z/my-project/src/components/chat/IncomingCallCenter.tsx:312:                aria-label="Tolak panggilan"
+/home/z/my-project/src/components/chat/IncomingCallCenter.tsx:323:                aria-label="Terima panggilan"
+/home/z/my-project/src/components/chat/IncomingCallCenter.tsx:339:          aria-label={`Menyambungkan panggilan dengan ${accepted.contactName}`}
+/home/z/my-project/src/components/extras/SettingsDisplayTab.tsx:56:              aria-label="Mode Gelap"
+/home/z/my-project/src/components/extras/SettingsDisplayTab.tsx:63:            <Switch checked={lite} onCheckedChange={setLite} aria-label="Mode Hemat" />
+/home/z/my-project/src/components/extras/SettingsDisplayTab.tsx:81:              <SelectTrigger className="w-[190px]" aria-label="Bahasa tujuan terjemahan">
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:255:            <Button variant="outline" onClick={() => setChangeOpen(true)} disabled={!data} aria-label="Ubah nomor">
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:273:              <SelectTrigger className="w-36" aria-label="Frekuensi backup otomatis">
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:286:          <Button onClick={backupNow} disabled={backingUp || !data} className="w-full sm:w-auto" aria-label="Buat backup sekarang">
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:309:            <ul className="max-h-96 overflow-y-auto wa-scrollbar divide-y divide-border" aria-label="Riwayat backup">
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:334:                          aria-label={`Unduh backup ${backupDate(b.createdAt)}`}
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:345:                        aria-label={`File backup ${backupDate(b.createdAt)} tidak tersedia`}
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:355:                      aria-label={`Pulihkan backup ${backupDate(b.createdAt)}`}
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:388:                <Progress value={storagePct} aria-label={`Penyimpanan terpakai ${storagePct.toFixed(1)} persen`} className="h-2.5" />
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:428:              aria-label="Hapus akun"
+/home/z/my-project/src/components/extras/SettingsAccountTab.tsx:530:                aria-label="Ketik HAPUS untuk konfirmasi"
+/home/z/my-project/src/components/extras/LinkDeviceDialog.tsx:136:              <Loader2 className="h-8 w-8 animate-spin text-primary" aria-label="Membuat QR" />
+/home/z/my-project/src/components/extras/LinkDeviceDialog.tsx:162:              <SelectTrigger aria-label="Jenis perangkat">
+/home/z/my-project/src/components/extras/LogoutFlow.tsx:58:                  aria-label="Keluar"
+/home/z/my-project/src/components/extras/LogoutFlow.tsx:79:            aria-label="Keluar"
+/home/z/my-project/src/components/extras/LogoutFlow.tsx:99:            aria-label={`Keluar dari ${businessName}`}
+/home/z/my-project/src/components/chat/ChatMenus.tsx:110:                  aria-label="Hapus bintang"
+/home/z/my-project/src/components/chat/ChatMenus.tsx:301:          aria-label={`Tema ${t.label}`}
+/home/z/my-project/src/components/chat/ChatMenus.tsx:464:          aria-label="Nama daftar baru"
+/home/z/my-project/src/components/extras/SettingsNotificationsTab.tsx:96:                aria-label={f.title}
+/home/z/my-project/src/components/extras/StoryViewer.tsx:161:                aria-label="Tutup status"
+/home/z/my-project/src/components/extras/StoryViewer.tsx:194:              aria-label="Status sebelumnya"
+/home/z/my-project/src/components/extras/StoryViewer.tsx:200:              aria-label="Status berikutnya"
+/home/z/my-project/src/components/extras/StoryViewer.tsx:208:              aria-label="Sebelumnya"
+/home/z/my-project/src/components/extras/StoryViewer.tsx:216:              aria-label="Berikutnya"
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:157:      window.sessionStorage.setItem("wa_locked", "1");
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:223:                aria-label="Arsipkan yang dipilih"
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:232:                aria-label="Hapus yang dipilih"
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:239:              <Button variant="ghost" size="icon" aria-label="Batal pilih" onClick={exitSelectMode}>
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:258:                  <Button variant="ghost" size="icon" aria-label="Menu utama">
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:326:                  <Button variant="ghost" size="icon" aria-label="Buat chat baru" className="hidden md:inline-flex">
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:352:            aria-label="Cari chat"
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:359:      <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto wa-scrollbar shrink-0" role="tablist" aria-label="Filter daftar chat">
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:380:      <div className="flex-1 overflow-y-auto wa-scrollbar min-h-0" role="list" aria-label="Daftar chat">
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:475:            aria-label={`Pilih chat ${chat.name}`}
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:483:          aria-label={`Buka chat ${chat.name}`}
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:502:                <Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" aria-label="Favorit" />
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:516:            {chat.muted && <BellOff className="h-3.5 w-3.5 text-muted-foreground" aria-label="Dibisukan" />}
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:517:            {chat.pinned && <Pin className="h-3.5 w-3.5 text-muted-foreground" aria-label="Disematkan" />}
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:521:                aria-label={`${chat.unread} pesan belum dibaca`}
+/home/z/my-project/src/components/chat/ChatListPanel.tsx:534:                aria-label={`Menu chat ${chat.name}`}
+/home/z/my-project/src/components/chat/MessageBubble.tsx:43:  if (status === "PENDING") return <Clock className="h-3.5 w-3.5 text-muted-foreground/80" aria-label="Menunggu" />;
+/home/z/my-project/src/components/chat/MessageBubble.tsx:44:  if (status === "SENT") return <Check className="h-3.5 w-3.5 text-muted-foreground/80" aria-label="Terkirim" />;
+/home/z/my-project/src/components/chat/MessageBubble.tsx:46:    return <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/80" aria-label="Tersampaikan" />;
+/home/z/my-project/src/components/chat/MessageBubble.tsx:47:  if (status === "READ") return <CheckCheck className="h-3.5 w-3.5 wa-tick-read" aria-label="Dibaca" />;
+/home/z/my-project/src/components/chat/MessageBubble.tsx:48:  if (status === "FAILED") return <CircleAlert className="h-3.5 w-3.5 text-red-500" aria-label="Gagal dikirim" />;
+/home/z/my-project/src/components/chat/MessageBubble.tsx:98:        aria-label={playing ? "Jeda pesan suara" : "Putar pesan suara"}
+/home/z/my-project/src/components/chat/MessageBubble.tsx:138:      aria-label={`Produk ${name}`}
+/home/z/my-project/src/components/chat/MessageBubble.tsx:168:        aria-label={`Buka lokasi ${message.placeName ?? ""} di Google Maps`}
+/home/z/my-project/src/components/chat/MessageBubble.tsx:235:          aria-label={`Unduh ${message.mediaName ?? "dokumen"}`}
+/home/z/my-project/src/components/chat/MessageBubble.tsx:301:            aria-label="Menu pesan"
+/home/z/my-project/src/components/chat/MessageBubble.tsx:399:          aria-label={selected ? "Batalkan pilih pesan" : "Pilih pesan"}
+/home/z/my-project/src/components/chat/MessageBubble.tsx:453:          <video src={message.mediaUrl} controls className="rounded-md max-h-72 max-w-full mb-1" aria-label="Video terlampir" />
+/home/z/my-project/src/components/chat/MessageBubble.tsx:491:                aria-label="Tutup terjemahan"
+/home/z/my-project/src/components/chat/MessageBubble.tsx:507:          {message.starred && <Star className="h-3 w-3 text-amber-500 fill-amber-500" aria-label="Berbintang" />}
+/home/z/my-project/src/components/ui/breadcrumb.tsx:8:  return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />
+/home/z/my-project/src/components/chat/Composer.tsx:307:          aria-label="Saran balasan cepat"
+/home/z/my-project/src/components/chat/Composer.tsx:330:        <div className="flex items-center gap-3 px-3 py-2.5" role="status" aria-label="Sedang merekam pesan suara">
+/home/z/my-project/src/components/chat/Composer.tsx:334:            aria-label="Batalkan rekaman"
+/home/z/my-project/src/components/chat/Composer.tsx:345:            aria-label="Kirim pesan suara"
+/home/z/my-project/src/components/chat/Composer.tsx:359:                aria-label="Pilih emoji"
+/home/z/my-project/src/components/chat/Composer.tsx:373:                    aria-label={`Sisipkan emoji ${em}`}
+/home/z/my-project/src/components/chat/Composer.tsx:398:                aria-label="Lampirkan berkas"
+/home/z/my-project/src/components/chat/Composer.tsx:521:            aria-label="Ketik pesan"
+/home/z/my-project/src/components/chat/Composer.tsx:530:              aria-label="Kirim pesan"
+/home/z/my-project/src/components/chat/Composer.tsx:539:              aria-label="Rekam pesan suara"
+/home/z/my-project/src/components/chat/NewChatDialogs.tsx:89:              aria-label="Cari kontak"
+/home/z/my-project/src/components/chat/NewChatDialogs.tsx:97:              <Loader2 className="h-5 w-5 animate-spin" aria-label="Memuat" />
+/home/z/my-project/src/components/chat/NewChatDialogs.tsx:110:              aria-label={`Mulai chat dengan ${c.name}`}
+/home/z/my-project/src/components/chat/NewChatDialogs.tsx:118:              {creating === c.id && <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" aria-label="Membuat" />}
+/home/z/my-project/src/components/chat/NewChatDialogs.tsx:210:                  <Loader2 className="h-5 w-5 animate-spin" aria-label="Memuat" />
+/home/z/my-project/src/components/chat/NewChatDialogs.tsx:225:                    aria-label={`Pilih ${c.name}`}
+/home/z/my-project/src/components/business/CartSheet.tsx:35:            aria-label={`Kurangi jumlah ${item.name}`}
+/home/z/my-project/src/components/business/CartSheet.tsx:47:            aria-label={`Tambah jumlah ${item.name}`}
+/home/z/my-project/src/components/business/CartSheet.tsx:55:        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => remove(item.productId)} aria-label={`Hapus ${item.name} dari keranjang`}>
+/home/z/my-project/src/components/business/CartSheet.tsx:93:        <Button variant="outline" size="sm" className="relative" aria-label={`Buka keranjang, ${count} item`}>
+/home/z/my-project/src/components/business/ProductDialog.tsx:150:                <SelectTrigger aria-label="Pilih koleksi">
+/home/z/my-project/src/components/business/ProductDialog.tsx:215:                      aria-label={`Pakai gambar preset ${src.split("product-")[1]?.replace(".png", "") ?? src}`}
+/home/z/my-project/src/components/business/ProductDialog.tsx:234:            <Switch checked={available} onCheckedChange={setAvailable} aria-label="Produk tersedia" />
+/home/z/my-project/src/components/social/CreateChannelDialog.tsx:131:              <SelectTrigger aria-label="Pilih warna avatar channel">
+/home/z/my-project/src/components/ui/pagination.tsx:15:      aria-label="pagination"
+/home/z/my-project/src/components/ui/pagination.tsx:74:      aria-label="Go to previous page"
+/home/z/my-project/src/components/ui/pagination.tsx:91:      aria-label="Go to next page"
+/home/z/my-project/src/components/social/PromoTemplatesCard.tsx:79:                  aria-label={`Salin teks template ${t.title}`}
+/home/z/my-project/src/components/social/ChannelPostCard.tsx:50:          aria-label={post.likedByMe ? "Batal suka unggahan ini" : "Sukai unggahan ini"}
+/home/z/my-project/src/components/social/ChannelPostCard.tsx:60:        <span className="flex items-center gap-1.5" aria-label={`Dilihat ${post.views} kali`}>
+/home/z/my-project/src/components/social/ChannelPostCard.tsx:68:              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Menu unggahan">
+/home/z/my-project/src/components/social/SocialConnectCard.tsx:56:      <Switch checked={connected} onCheckedChange={onToggle} aria-label={`Hubungkan ${name}`} />
+/home/z/my-project/src/components/social/ChatButtonCard.tsx:45:          <div className="wa-chat-bg relative h-40 overflow-hidden rounded-xl border border-border" aria-label="Pratinjau tombol chat mengapung">
+/home/z/my-project/src/components/social/ChatButtonCard.tsx:75:              aria-label="Salin cuplikan kode tombol chat"
+/home/z/my-project/src/components/social/ChannelComposer.tsx:94:        aria-label={`Tulis unggahan untuk ${channelName}`}
+/home/z/my-project/src/components/social/ChannelComposer.tsx:105:            aria-label="Hapus gambar terpilih"
+/home/z/my-project/src/components/social/ChannelComposer.tsx:125:                aria-label={`Gunakan gambar ${src.replace("/images/product-", "").replace(".png", "")}`}
+/home/z/my-project/src/components/ui/sidebar.tsx:289:      aria-label="Toggle Sidebar"
+/home/z/my-project/src/components/social/AdCampaignCard.tsx:150:          <div className="max-h-96 space-y-2 overflow-y-auto wa-scrollbar" aria-label="Daftar iklan yang dibuat">
+/home/z/my-project/src/components/social/AdCampaignCard.tsx:195:                <SelectTrigger aria-label="Pilih tujuan iklan">
+/home/z/my-project/src/components/social/AdCampaignCard.tsx:208:                <SelectTrigger aria-label="Pilih audiens target">
+/home/z/my-project/src/components/social/AdCampaignCard.tsx:233:              aria-label="Atur anggaran harian"
+/home/z/my-project/src/components/social/QrPromoCard.tsx:100:            aria-label="QR Code promosi"
+
+[Showing results with pagination = limit: 250]

@@ -1,0 +1,626 @@
+     1→/* Seed data demo: Toko Berkah Jaya (WA Business clone) */
+     2→import { PrismaClient } from "@prisma/client";
+     3→
+     4→const db = new PrismaClient();
+     5→
+     6→// ---------- helpers ----------
+     7→const mins = (n: number) => new Date(Date.now() - n * 60_000);
+     8→const hrs = (n: number) => new Date(Date.now() - n * 3_600_000);
+     9→const days = (n: number) => new Date(Date.now() - n * 86_400_000);
+    10→
+    11→function tinyWavBase64(seconds = 1.2, freq = 620): string {
+    12→  const sampleRate = 8000;
+    13→  const total = Math.floor(sampleRate * seconds);
+    14→  const data = Buffer.alloc(total * 2);
+    15→  for (let i = 0; i < total; i++) {
+    16→    const t = i / sampleRate;
+    17→    const fade = Math.min(1, t * 8) * Math.min(1, (seconds - t) * 4);
+    18→    const v = Math.sin(2 * Math.PI * freq * t) * 0.25 * fade;
+    19→    data.writeInt16LE(Math.round(v * 32767), i * 2);
+    20→  }
+    21→  const header = Buffer.alloc(44);
+    22→  header.write("RIFF", 0);
+    23→  header.writeUInt32LE(36 + data.length, 4);
+    24→  header.write("WAVE", 8);
+    25→  header.write("fmt ", 12);
+    26→  header.writeUInt32LE(16, 16);
+    27→  header.writeUInt16LE(1, 20);
+    28→  header.writeUInt16LE(1, 22);
+    29→  header.writeUInt32LE(sampleRate, 24);
+    30→  header.writeUInt32LE(sampleRate * 2, 28);
+    31→  header.writeUInt16LE(2, 32);
+    32→  header.writeUInt16LE(16, 34);
+    33→  header.write("data", 36);
+    34→  header.writeUInt32LE(data.length, 40);
+    35→  return Buffer.concat([header, data]).toString("base64");
+    36→}
+    37→
+    38→const wav = `data:audio/wav;base64,${tinyWavBase64()}`;
+    39→
+    40→async function main() {
+    41→  // wipe (order matters)
+    42→  await db.message.deleteMany();
+    43→  await db.chat.deleteMany();
+    44→  await db.callLog.deleteMany();
+    45→  await db.story.deleteMany();
+    46→  await db.broadcast.deleteMany();
+    47→  await db.quickReply.deleteMany();
+    48→  await db.channelPost.deleteMany();
+    49→  await db.channel.deleteMany();
+    50→  await db.community.deleteMany();
+    51→  await db.device.deleteMany();
+    52→  await db.dailyStat.deleteMany();
+    53→  await db.chatBackup.deleteMany();
+    54→  await db.product.deleteMany();
+    55→  await db.collection.deleteMany();
+    56→  await db.label.deleteMany();
+    57→  await db.contact.deleteMany();
+    58→  await db.profile.deleteMany();
+    59→
+    60→  // ---------- PROFILE ----------
+    61→  await db.profile.create({
+    62→    data: {
+    63→      id: "main",
+    64→      businessName: "Toko Berkah Jaya",
+    65→      ownerName: "Pak Jaya Santoso",
+    66→      category: "Toko Souvenir & Pangan Olahan",
+    67→      description:
+    68→        "Toko oleh-oleh khas Yogyakarta sejak 2015. Menyediakan kopi arabika, keripik singkong, batik tulis, songket, dan kerajinan kulit. Melayani pembelian retail & grosir (reseller).",
+    69→      address: "Jl. Malioboro No. 24, Sosromenduran, Gedong Tengen, Kota Yogyakarta, DIY 55271",
+    70→      lat: -7.7929,
+    71→      lng: 110.3657,
+    72→      phone: "+62 812-3456-7890",
+    73→      email: "halo@tokoberkahjaya.id",
+    74→      website: "https://tokoberkahjaya.id",
+    75→      instagram: "tokoberkahjaya",
+    76→      facebook: "Toko Berkah Jaya",
+    77→      tiktok: "tokoberkahjaya",
+    78→      hours: JSON.stringify([
+    79→        { day: "Senin", open: "08:00", close: "17:00", closed: false },
+    80→        { day: "Selasa", open: "08:00", close: "17:00", closed: false },
+    81→        { day: "Rabu", open: "08:00", close: "17:00", closed: false },
+    82→        { day: "Kamis", open: "08:00", close: "17:00", closed: false },
+    83→        { day: "Jumat", open: "08:00", close: "16:30", closed: false },
+    84→        { day: "Sabtu", open: "08:00", close: "18:00", closed: false },
+    85→        { day: "Minggu", open: "", close: "", closed: true },
+    86→      ]),
+    87→      logoUrl: "/images/logo.png",
+    88→      greetingText:
+    89→        "Halo! Terima kasih sudah menghubungi Toko Berkah Jaya 🙏 Ada yang bisa kami bantu? Ketik *katalog* untuk melihat produk kami.",
+    90→      awayText:
+    91→        "Terima kasih atas pesan Anda. Saat ini kami sedang di luar jam operasional (08.00–17.00 WIB). Pesan Anda akan segera kami balas begitu toko buka kembali. 🙏",
+    92→    },
+    93→  });
+    94→
+    95→  // ---------- LABELS ----------
+    96→  const labelData = [
+    97→    { name: "Pelanggan Baru", colorKey: "emerald", sortOrder: 1 },
+    98→    { name: "Prospek", colorKey: "amber", sortOrder: 2 },
+    99→    { name: "Menunggu Pembayaran", colorKey: "orange", sortOrder: 3 },
+   100→    { name: "Sudah Bayar", colorKey: "teal", sortOrder: 4 },
+   101→    { name: "Pesanan Diproses", colorKey: "purple", sortOrder: 5 },
+   102→    { name: "Pesanan Selesai", colorKey: "green", sortOrder: 6 },
+   103→    { name: "VIP", colorKey: "pink", sortOrder: 7 },
+   104→    { name: "Reseller", colorKey: "red", sortOrder: 8 },
+   105→  ];
+   106→  const labels: Record<string, { id: string }> = {};
+   107→  for (const l of labelData) {
+   108→    labels[l.name] = await db.label.create({ data: l });
+   109→  }
+   110→
+   111→  // ---------- CONTACTS ----------
+   112→  const c = async (
+   113→    name: string,
+   114→    phone: string,
+   115→    colorKey: string,
+   116→    about: string,
+   117→    labelNames: string[],
+   118→    lastSeenMin: number | null
+   119→  ) => {
+   120→    const found = await db.contact.create({
+   121→      data: {
+   122→        name,
+   123→        phone,
+   124→        colorKey,
+   125→        about,
+   126→        lastSeen: lastSeenMin === null ? null : mins(lastSeenMin),
+   127→        labelIds: JSON.stringify(labelNames.map((n) => labels[n].id)),
+   128→      },
+   129→    });
+   130→    return found;
+   131→  };
+   132→
+   133→  const budi = await c("Budi Santoso", "+62 813-1111-2222", "emerald", "Halo, saya Budi 👋", ["Pelanggan Baru", "Prospek"], 12);
+   134→  const siti = await c("Siti Rahayu", "+62 812-2222-3333", "purple", "Sibuk dulu ya", ["VIP", "Sudah Bayar"], 45);
+   135→  const andi = await c("Andi Wijaya", "+62 813-3333-4444", "amber", "Available", ["Prospek"], 180);
+   136→  const dewi = await c("Dewi Lestari", "+62 812-4444-5555", "pink", "Bertedua di cahaya-Nya", ["Pesanan Diproses", "Menunggu Pembayaran"], 30);
+   137→  const rudi = await c("Rudi Hartono", "+62 813-5555-6666", "teal", "Di kantor", ["Pelanggan Baru"], 2880);
+   138→  const maya = await c("Maya Putri", "+62 812-6666-7777", "rose", "Reseller resmi BJ ✅", ["VIP", "Reseller"], 100);
+   139→  const agus = await c("Agus Salim", "+62 813-7777-8888", "orange", "Santai dulu", ["Pesanan Selesai"], 4320);
+   140→  const fitri = await c("Fitri Handayani", "+62 812-8888-9999", "violet", "Owner Toko Fitri", ["Reseller", "Sudah Bayar"], 90);
+   141→  const maju = await c("Toko Maju Jaya", "+62 813-9999-0000", "cyan", "Toko grosir jakarta", ["Reseller", "VIP"], 200);
+   142→  const kiosk = await c("Ibu Kiosk", "+62 812-0000-1111", "lime", "Bu Kios Malioboro", ["Prospek"], 10080);
+   143→
+   144→  const allContacts = [budi, siti, andi, dewi, rudi, maya, agus, fitri, maju, kiosk];
+   145→
+   146→  // ---------- CHATS & MESSAGES ----------
+   147→  type Msg = Partial<{
+   148→    sender: string;
+   149→    type: string;
+   150→    body: string;
+   151→    mediaUrl: string;
+   152→    mediaName: string;
+   153→    mediaMime: string;
+   154→    mediaSize: number;
+   155→    latitude: number;
+   156→    longitude: number;
+   157→    placeName: string;
+   158→    cardName: string;
+   159→    cardPhone: string;
+   160→    productId: string;
+   161→    status: string;
+   162→    at: Date;
+   163→  }>;
+   164→
+   165→  const mkChat = async (
+   166→    data: { type?: string; name?: string; contactId?: string; members?: string; groupDesc?: string; pinned?: boolean; archived?: boolean; muted?: boolean; unread?: number; isBusinessChat?: boolean; colorKey?: string; avatarUrl?: string },
+   167→    msgs: Msg[]
+   168→  ) => {
+   169→    const last = msgs.length ? msgs[msgs.length - 1].at ?? hrs(1) : hrs(1);
+   170→    const chat = await db.chat.create({
+   171→      data: {
+   172→        type: "PRIVATE",
+   173→        ...data,
+   174→        lastMessageAt: last,
+   175→      },
+   176→    });
+   177→    for (const m of msgs) {
+   178→      await db.message.create({
+   179→        data: {
+   180→          chatId: chat.id,
+   181→          sender: m.sender ?? "me",
+   182→          type: m.type ?? "TEXT",
+   183→          body: m.body ?? "",
+   184→          mediaUrl: m.mediaUrl,
+   185→          mediaName: m.mediaName,
+   186→          mediaMime: m.mediaMime,
+   187→          mediaSize: m.mediaSize,
+   188→          latitude: m.latitude,
+   189→          longitude: m.longitude,
+   190→          placeName: m.placeName,
+   191→          cardName: m.cardName,
+   192→          cardPhone: m.cardPhone,
+   193→          productId: m.productId,
+   194→          status: m.sender === "me" || m.sender === "system" ? m.status ?? "READ" : "READ",
+   195→          createdAt: m.at ?? hrs(1),
+   196→        },
+   197→      });
+   198→    }
+   199→    return chat;
+   200→  };
+   201→
+   202→  // Budi Santoso — tanya produk kopi (unread 2)
+   203→  const chatBudi = await mkChat(
+   204→    { contactId: budi.id, unread: 2, isBusinessChat: true },
+   205→    [
+   206→      { sender: budi.id, body: "Halo kak, mau tanya kopi arabika gayo tersedia?", at: hrs(5) },
+   207→      { sender: "system", type: "SYSTEM", body: "Pesan otomatis: Halo! Terima kasih sudah menghubungi Toko Berkah Jaya 🙏", at: hrs(5) },
+   208→      { sender: "me", body: "Halo Pak Budi 😊 Tersedia kak! Roast bean maupun grinding ada.", status: "READ", at: hrs(4.9) },
+   209→      { sender: "me", type: "PRODUCT", productId: "prod-kopi", body: "Kopi Arabika Gayo 250g", status: "READ", at: hrs(4.8) },
+   210→      { sender: budi.id, body: "Ini tadi beli 2 di toko, enak banget kopi nya 👍", at: hrs(3.2) },
+   211→      { sender: budi.id, type: "IMAGE", mediaUrl: "/images/product-kopi.png", body: "Ini yang kemarin ya kak", at: mins(28) },
+   212→      { sender: budi.id, body: "Besok bisa antar ke Kaliurang gak? 😄", at: mins(15) },
+   213→    ]
+   214→  );
+   215→
+   216→  // Siti Rahayu — VIP, order batik (pinned)
+   217→  const chatSiti = await mkChat(
+   218→    { contactId: siti.id, pinned: true, isBusinessChat: true },
+   219→    [
+   220→      { sender: siti.id, body: "Kak, batik parang 2 meter warna sogan ada stok?", at: days(1.2) },
+   221→      { sender: "me", body: "Ada kak, hari ini baru masuk 5 lembar ✅", status: "READ", at: days(1.1) },
+   222→      { sender: "me", type: "IMAGE", mediaUrl: "/images/product-batik.png", body: "Ini kak motifnya", status: "READ", at: days(1.09) },
+   223→      { sender: siti.id, body: "Oke, ambil 2 ya. Transfer kemarin sudah dikirim", at: days(1) },
+   224→      { sender: "me", type: "DOC", mediaUrl: "#", mediaName: "Invoice_BJ-2024-0187.pdf", mediaMime: "application/pdf", mediaSize: 184320, body: "Terima kasih 🙏 Berikut invoice-nya", status: "READ", at: days(0.9) },
+   225→      { sender: "me", type: "LOCATION", latitude: -7.7929, longitude: 110.3657, placeName: "Toko Berkah Jaya, Malioboro", body: "Ini lokasi toko kami kak, bisa ambil langsung", status: "READ", at: days(0.8) },
+   226→      { sender: siti.id, type: "AUDIO", mediaUrl: wav, body: "Pesan suara (1:12)", mediaSize: 56000, at: hrs(20) },
+   227→      { sender: siti.id, body: "Sudah sampai, batiknya bagus banget! Terima kasih ya 😍", at: hrs(2) },
+   228→    ]
+   229→  );
+   230→
+   231→  // Dewi Lestari — nunggu pembayaran
+   232→  const chatDewi = await mkChat(
+   233→    { contactId: dewi.id, unread: 1, isBusinessChat: true },
+   234→    [
+   235→      { sender: dewi.id, body: "Kak, madu hutan 500ml ready?", at: hrs(7) },
+   236→      { sender: "me", body: "Ready kak 😊 120 ribu, free bubble wrap + bubble wrap anti pecah", status: "DELIVERED", at: hrs(6.9) },
+   237→      { sender: "me", body: "Bisa juga COD area Jogja kak", status: "READ", at: hrs(6.8) },
+   238→      { sender: dewi.id, body: "Oke siap, saya transfer besok pagi ya", at: hrs(2.5) },
+   239→    ]
+   240→  );
+   241→
+   242→  // Maya Putri — reseller
+   243→  const chatMaya = await mkChat(
+   244→    { contactId: maya.id, isBusinessChat: true },
+   245→    [
+   246→      { sender: maya.id, body: "Kak, keripik balado bisa 50 pcs harga reseller?", at: days(2) },
+   247→      { sender: "me", body: "Bisa kak, 20.000/pcs, free ongkir ke Semarang min. 50 pcs ✅", status: "READ", at: days(1.9) },
+   248→      { sender: maya.id, body: "Siap, saya kirim alamat ya", at: days(1.8) },
+   249→      { sender: "me", type: "CONTACT_CARD", cardName: "Kurir Berkah Jaya (Anton)", cardPhone: "+62 811-2345-6789", body: "Nanti dijemput kurir kami", status: "READ", at: days(1.7) },
+   250→      { sender: maya.id, body: "Sudah dikirim uangnya kak, cek ya 🙏", at: hrs(10) },
+   251→      { sender: "me", body: "Sudah masuk kak, terima kasih! Pesanan diproses hari ini 🚚", status: "READ", at: hrs(9.5) },
+   252→    ]
+   253→  );
+   254→
+   255→  // Andi Wijaya — prospek pendek
+   256→  const chatAndi = await mkChat(
+   257→    { contactId: andi.id },
+   258→    [
+   259→      { sender: andi.id, body: "Permisi, untuk songket tenun bisa lihat katalog?", at: days(3) },
+   260→      { sender: "me", body: "Tentu kak, ini katalog lengkap kami:", status: "READ", at: days(3) },
+   261→      { sender: "me", type: "IMAGE", mediaUrl: "/images/product-songket.png", body: "Songket Tenun Premium — Rp 450.000", status: "READ", at: days(2.9) },
+   262→    ]
+   263→  );
+   264→
+   265→  // Rudi Hartono — archived
+   266→  const chatRudi = await mkChat(
+   267→    { contactId: rudi.id, archived: true },
+   268→    [
+   269→      { sender: rudi.id, body: "Kak, tas kulitnya ready stock warna hitam?", at: days(6) },
+   270→      { sender: "me", body: "Ready kak, besok bisa kami kirim ✅", status: "READ", at: days(6) },
+   271→      { sender: rudi.id, body: "Sudah diterima, makasih!", at: days(5) },
+   272→    ]
+   273→  );
+   274→
+   275→  // Agus Salim — lama
+   276→  const chatAgus = await mkChat(
+   277→    { contactId: agus.id },
+   278→    [
+   279→      { sender: agus.id, body: "Terima kasih kak, pesanan #BJ-2024-0142 sudah sampai dan aman 🙏", at: days(8) },
+   280→      { sender: "me", body: "Sama-sama kak! Jangan lupa review ya 😊", status: "READ", at: days(8) },
+   281→    ]
+   282→  );
+   283→
+   284→  // Group Reseller
+   285→  const chatGroup = await mkChat(
+   286→    {
+   287→      type: "GROUP",
+   288→      name: "Reseller Berkah Jaya 🛍️",
+   289→      colorKey: "teal",
+   290→      groupDesc: "Grup reseller resmi Toko Berkah Jaya. Info stok, harga grosir & pengiriman.",
+   291→      members: JSON.stringify([
+   292→        { contactId: maya.id, role: "admin" },
+   293→        { contactId: fitri.id, role: "admin" },
+   294→        { contactId: maju.id, role: "member" },
+   295→      ]),
+   296→      unread: 3,
+   297→    },
+   298→    [
+   299→      { sender: "system", type: "SYSTEM", body: "Maya Putri menambahkan Toko Maju Jaya", at: days(4) },
+   300→      { sender: fitri.id, body: "Pagil! Stok batik sogan masih ada gak kak?", at: hrs(26) },
+   301→      { sender: "me", body: "Ada kak Fitri, sisa 12 lembar. Prioritas reseller dulu 😊", status: "READ", at: hrs(25) },
+   302→      { sender: maju.id, body: "Untuk grosir ke Jakarta bisa rekap mingguan?", at: hrs(9) },
+   303→      { sender: "me", body: "Bisa banget kak. Nanti saya buatkan price list rekapnya 📋", status: "READ", at: hrs(8.5) },
+   304→      { sender: maya.id, body: "Noted kak 🙌", at: hrs(8) },
+   305→      { sender: fitri.id, body: "Mantap, thanks kak 👍", at: hrs(1.5) },
+   306→    ]
+   307→  );
+   308→
+   309→  // ---------- CALLS ----------
+   310→  await db.callLog.createMany({
+   311→    data: [
+   312→      { contactId: siti.id, contactName: siti.name, colorKey: siti.colorKey, kind: "VIDEO", direction: "IN", durationSec: 0, createdAt: hrs(3) },
+   313→      { contactId: budi.id, contactName: budi.name, colorKey: budi.colorKey, kind: "VOICE", direction: "OUT", durationSec: 125, createdAt: hrs(14) },
+   314→      { contactId: dewi.id, contactName: dewi.name, colorKey: dewi.colorKey, kind: "VOICE", direction: "IN", durationSec: 45, createdAt: days(1) },
+   315→      { contactId: maya.id, contactName: maya.name, colorKey: maya.colorKey, kind: "VIDEO", direction: "OUT", durationSec: 300, createdAt: days(1.5) },
+   316→      { contactId: fitri.id, contactName: fitri.name, colorKey: fitri.colorKey, kind: "VOICE", direction: "MISSED", durationSec: 0, createdAt: days(2) },
+   317→      { contactId: agus.id, contactName: agus.name, colorKey: agus.colorKey, kind: "VOICE", direction: "OUT", durationSec: 62, createdAt: days(3) },
+   318→    ],
+   319→  });
+   320→
+   321→  // ---------- KATALOG ----------
+   322→  const makanan = await db.collection.create({ data: { name: "Makanan & Minuman" } });
+   323→  const kerajinan = await db.collection.create({ data: { name: "Kerajinan" } });
+   324→  const fashion = await db.collection.create({ data: { name: "Fashion" } });
+   325→
+   326→  await db.product.createMany({
+   327→    data: [
+   328→      {
+   329→        id: "prod-kopi",
+   330→        name: "Kopi Arabika Gayo 250g",
+   331→        price: 85000,
+   332→        description: "Kopi arabika single origin dari dataran tinggi Gayo, Aceh. Roast medium, notes cokelat & karamel. Tersedia whole bean / grind.",
+   333→        sku: "BJ-KOPI-001",
+   334→        imageUrl: "/images/product-kopi.png",
+   335→        link: "https://tokoberkahjaya.id/kopi-arabika-gayo",
+   336→        stock: 42,
+   337→        collectionId: makanan.id,
+   338→      },
+   339→      {
+   340→        name: "Keripik Singkong Balado 500g",
+   341→        price: 25000,
+   342→        description: "Keripik singkong renyah dengan bumbu balado khas Jogja. Tanpa MSG, tahan 3 bulan.",
+   343→        sku: "BJ-KRPIK-002",
+   344→        imageUrl: "/images/product-keripik.png",
+   345→        link: "https://tokoberkahjaya.id/keripik-balado",
+   346→        stock: 120,
+   347→        collectionId: makanan.id,
+   348→      },
+   349→      {
+   350→        name: "Madu Hutan Murni 500ml",
+   351→        price: 120000,
+   352→        description: "Madu hutan asli Sumbawa, dipanen petani lokal. Tanpa gula tambahan, sudah uji lab.",
+   353→        sku: "BJ-MADU-003",
+   354→        imageUrl: "/images/product-madu.png",
+   355→        link: "https://tokoberkahjaya.id/madu-hutan",
+   356→        stock: 35,
+   357→        collectionId: makanan.id,
+   358→      },
+   359→      {
+   360→        name: "Batik Tulis Parang Sogan 2m",
+   361→        price: 275000,
+   362→        description: "Batik tulis asli Pekalongan, motif parang sogan, pewarna alami indigofera. Cocok untuk baju & sarung.",
+   363→        sku: "BJ-BTK-004",
+   364→        imageUrl: "/images/product-batik.png",
+   365→        link: "https://tokoberkahjaya.id/batik-parang",
+   366→        stock: 12,
+   367→        collectionId: kerajinan.id,
+   368→      },
+   369→      {
+   370→        name: "Songket Tenun Premium",
+   371→        price: 450000,
+   372→        description: "Songket tenun tangan dengan benang emas asli. Pilihan tepat untuk acara adat & hantaran.",
+   373→        sku: "BJ-SNGKT-005",
+   374→        imageUrl: "/images/product-songket.png",
+   375→        link: "https://tokoberkahjaya.id/songket-premium",
+   376→        stock: 8,
+   377→        collectionId: kerajinan.id,
+   378→      },
+   379→      {
+   380→        name: "Tas Kulit Jepit Handmade",
+   381→        price: 165000,
+   382→        description: "Tas kulit sapi asli buatan tangan pengrajin Kotagede. Tersedia warna cokelat, hitam, mustard.",
+   383→        sku: "BJ-TAS-006",
+   384→        imageUrl: "/images/product-tas.png",
+   385→        link: "https://tokoberkahjaya.id/tas-kulit",
+   386→        stock: 20,
+   387→        collectionId: fashion.id,
+   388→      },
+   389→    ],
+   390→  });
+   391→
+   392→  // ---------- STATUS / STORIES ----------
+   393→  await db.story.createMany({
+   394→    data: [
+   395→      {
+   396→        sender: "me",
+   397→        mediaType: "TEXT",
+   398→        body: "Promo Gajian! Diskon 20% semua produk s/d akhir pekan 🎉🎉",
+   399→        bgColor: "emerald",
+   400→        views: 34,
+   401→        createdAt: hrs(4),
+   402→        expiresAt: hrs(20),
+   403→      },
+   404→      {
+   405→        sender: "me",
+   406→        mediaType: "IMAGE",
+   407→        body: "Menu baru: Kopi Gayo biji segar roasting hari ini 🔥",
+   408→        mediaUrl: "/images/product-kopi.png",
+   409→        views: 51,
+   410→        createdAt: hrs(10),
+   411→        expiresAt: hrs(14),
+   412→      },
+   413→      {
+   414→        sender: "me",
+   415→        mediaType: "IMAGE",
+   416→        body: "Testimoni ibu Siti — terima kasih sudah order lagi 😍",
+   417→        mediaUrl: "/images/product-batik.png",
+   418→        views: 19,
+   419→        createdAt: hrs(28),
+   420→        expiresAt: hrs(-4), // sudah lewat 4 jam lagi? no: 20 jam lagi
+   421→      },
+   422→      {
+   423→        sender: siti.id,
+   424→        mediaType: "IMAGE",
+   425→        body: "Batiknya sampai! Mantap 🔥",
+   426→        mediaUrl: "/images/product-batik.png",
+   427→        views: 8,
+   428→        createdAt: hrs(6),
+   429→        expiresAt: hrs(18),
+   430→      },
+   431→      {
+   432→        sender: maya.id,
+   433→        mediaType: "IMAGE",
+   434→        body: "Restock keripik dulu 🙌",
+   435→        mediaUrl: "/images/product-keripik.png",
+   436→        views: 5,
+   437→        createdAt: hrs(12),
+   438→        expiresAt: hrs(12),
+   439→      },
+   440→      {
+   441→        sender: budi.id,
+   442→        mediaType: "TEXT",
+   443→        body: "Buka puasa bareng kopinya Berkah Jaya ☕",
+   444→        bgColor: "amber",
+   445→        views: 3,
+   446→        createdAt: hrs(8),
+   447→        expiresAt: hrs(16),
+   448→      },
+   449→    ],
+   450→  });
+   451→
+   452→  // ---------- BROADCASTS ----------
+   453→  await db.broadcast.createMany({
+   454→    data: [
+   455→      {
+   456→        name: "Promo Gajian Akhir Bulan",
+   457→        message: "🎉 *PROMO GAJIAN!* Diskon 20% untuk semua produk di Toko Berkah Jaya. Berlaku sampai akhir pekan. Kunjungi katalog: tokoberkahjaya.id/katalog",
+   458→        audienceType: "ALL",
+   459→        recipientCount: 10,
+   460→        sentCount: 10,
+   461→        deliveredCount: 9,
+   462→        readCount: 7,
+   463→        failedCount: 1,
+   464→        status: "SENT",
+   465→        createdAt: days(2),
+   466→        sentAt: days(2),
+   467→      },
+   468→      {
+   469→        name: "Rilis Produk: Songket Premium",
+   470→        message: "✨ Produk baru! Songket tenun premium dengan benang emas asli. Harga spesial untuk reseller. Cek katalog sekarang!",
+   471→        audienceType: "LABEL",
+   472→        audienceLabel: labels["Reseller"].id,
+   473→        recipientCount: 3,
+   474→        sentCount: 3,
+   475→        deliveredCount: 3,
+   476→        readCount: 3,
+   477→        failedCount: 0,
+   478→        status: "SENT",
+   479→        createdAt: days(5),
+   480→        sentAt: days(5),
+   481→      },
+   482→      {
+   483→        name: "Diskon Hari Kemerdekaan",
+   484→        message: "🇮🇩 DIRGAHAYU! Diskon 17% semua kerajinan batik & songket. Gunakan kode MERDEKA17.",
+   485→        audienceType: "ALL",
+   486→        status: "DRAFT",
+   487→        createdAt: hrs(30),
+   488→      },
+   489→    ],
+   490→  });
+   491→
+   492→  // ---------- QUICK REPLIES ----------
+   493→  await db.quickReply.createMany({
+   494→    data: [
+   495→      { shortcut: "/harga", message: "Berikut daftar harga terbaru kami kak: Kopi Gayo 250g Rp 85.000, Keripik Balado Rp 25.000, Madu Hutan Rp 120.000, Batik Tulis Rp 275.000, Songket Rp 450.000, Tas Kulit Rp 165.000. 😊", sortOrder: 1 },
+   496→      { shortcut: "/ongkir", message: "Ongkir dihitung sesuai berat & lokasi ya kak. Area Jogja free ongkir min. belanja Rp 100.000 🚚 Luar kota via JNE/J&T/SiCepat.", sortOrder: 2 },
+   497→      { shortcut: "/bayar", message: "Pembayaran bisa via Transfer (BCA 1234567890 a.n. Berkah Jaya), QRIS, atau COD area Jogja 🙏", sortOrder: 3 },
+   498→      { shortcut: "/katalog", message: "Katalog lengkap bisa dilihat di: https://tokoberkahjaya.id/katalog atau ketik nama produk yang kakak cari 😊", sortOrder: 4 },
+   499→      { shortcut: "/thanks", message: "Terima kasih sudah berbelanja di Toko Berkah Jaya 🙏🙏 Jangan lupa follow IG @tokoberkahjaya untuk promo terbaru!", sortOrder: 5 },
+   500→    ],
+   501→  });
+   502→
+   503→  // ---------- CHANNELS ----------
+   504→  const chMine = await db.channel.create({
+   505→    data: {
+   506→      name: "Berkah Jaya Official",
+   507→      handle: "berkahjaya",
+   508→      description: "Channel resmi Toko Berkah Jaya. Info produk, promo & tips UMKM.",
+   509→      colorKey: "emerald",
+   510→      followers: 1240,
+   511→      isMine: true,
+   512→      verified: false,
+   513→    },
+   514→  });
+   515→  const chUmkm = await db.channel.create({
+   516→    data: {
+   517→      name: "UMKM Indonesia",
+   518→      handle: "umkmindonesia",
+   519→      description: "Channel terbesar untuk pelaku UMKM se-Indonesia. Tips, pelatihan & info subsidi.",
+   520→      colorKey: "amber",
+   521→      followers: 152000,
+   522→      following: true,
+   523→      verified: true,
+   524→    },
+   525→  });
+   526→  const chKuliner = await db.channel.create({
+   527→    data: {
+   528→      name: "Kuliner Nusantara",
+   529→      handle: "kulinernusantara",
+   530→      description: "Update kuliner legendaris dari Sabang sampai Merauke 🍜",
+   531→      colorKey: "orange",
+   532→      followers: 89300,
+   533→      following: true,
+   534→    },
+   535→  });
+   536→  const chTips = await db.channel.create({
+   537→    data: {
+   538→      name: "Tips Jualan Online",
+   539→      handle: "tipsjualan",
+   540→      description: "Tips marketing, foto produk & closing jualan tiap hari 📈",
+   541→      colorKey: "purple",
+   542→      followers: 45200,
+   543→      following: false,
+   544→    },
+   545→  });
+   546→
+   547→  await db.channelPost.createMany({
+   548→    data: [
+   549→      { channelId: chMine.id, body: "🚨 RESTOCK! Kopi Arabika Gayo 250g sudah tersedia kembali. Buruan order sebelum kehabisan!", likes: 42, views: 512, createdAt: hrs(6) },
+   550→      { channelId: chMine.id, body: "Tips hari ini: Balas chat pelanggan maksimal 5 menit, konversi naik sampai 3x lipat! ⏱️", likes: 88, views: 923, createdAt: days(1) },
+   551→      { channelId: chMine.id, body: "Terima kasih 1.200 followers! 🎉 Berikut video behind the scene roasting kopi kami.", imageUrl: "/images/product-kopi.png", likes: 120, views: 1100, createdAt: days(2) },
+   552→      { channelId: chUmkm.id, body: "📋 Pendaftaran pelatihan digital marketing gratis untuk 500 UMKM dibuka! Link pendaftaran di bio.", likes: 990, views: 12400, createdAt: hrs(20) },
+   553→      { channelId: chUmkm.id, body: "Penting! Mulai bulan depan, laporan pajak UMKM bisa via aplikasi. Simak panduannya pada unggahan berikutnya.", likes: 650, views: 8100, createdAt: days(2) },
+   554→      { channelId: chKuliner.id, body: "🍜 5 warung bakmi legendaris Jogja yang buka 24 jam. Simak daftarnya!", likes: 430, views: 5600, createdAt: hrs(30) },
+   555→      { channelId: chKuliner.id, body: "Polling: Gudeg Yu Djum vs Gudeg Pawon? Komen pilihanmu! 👇", likes: 210, views: 3200, createdAt: days(1.5) },
+   556→      { channelId: chTips.id, body: "Fotoproduk pakai cahaya jendela pagi (07-09) hasilnya 2x lebih bagus daripada lampu kuning 💡📸", likes: 320, views: 4100, createdAt: days(3) },
+   557→    ],
+   558→  });
+   559→
+   560→  // ---------- COMMUNITY ----------
+   561→  await db.community.create({
+   562→    data: {
+   563→      name: "Komunitas UMKM Jogja",
+   564→      description: "Wadah pelaku usaha mikro & kecil di DIY. Berbagi info stok, kurir, dan event bazar.",
+   565→      colorKey: "teal",
+   566→      memberCount: 256,
+   567→      announcement: "Bazar UMKM Ramadhan akan dihelat di Taman Pintar, 15-20 bulan depan. Pendaftaran lapak via pengurus.",
+   568→      groups: JSON.stringify([
+   569→        { id: "g1", name: "Pengumuman", members: 256, description: "Info penting dari pengurus" },
+   570→        { id: "g2", name: "Diskusi Produk", members: 190, description: "Showcase & diskusi produk anggota" },
+   571→        { id: "g3", name: "Kurir & Ongkir", members: 175, description: "Info tarif & rekomendasi kurir" },
+   572→        { id: "g4", name: "Bazar & Event", members: 210, description: "Koordinasi event bazar" },
+   573→      ]),
+   574→    },
+   575→  });
+   576→
+   577→  // ---------- DEVICES ----------
+   578→  await db.device.createMany({
+   579→    data: [
+   580→      { name: "iPhone 13 (Perangkat utama)", platform: "PHONE", current: true, lastActive: mins(1), location: "Yogyakarta, Indonesia" },
+   581→      { name: "Chrome di Windows", platform: "WEB", lastActive: hrs(2), location: "Yogyakarta, Indonesia" },
+   582→      { name: "MacBook Pro — WhatsApp Desktop", platform: "DESKTOP", lastActive: days(1), location: "Yogyakarta, Indonesia" },
+   583→      { name: "iPad Air (Safari)", platform: "TABLET", lastActive: days(4), location: "Semarang, Indonesia" },
+   584→    ],
+   585→  });
+   586→
+   587→  // ---------- STATS ----------
+   588→  const statRows = [];
+   589→  for (let i = 13; i >= 0; i--) {
+   590→    const d = days(i);
+   591→    const sent = 60 + Math.round(Math.sin(i * 1.7) * 25 + Math.random() * 40);
+   592→    const delivered = Math.round(sent * (0.88 + Math.random() * 0.1));
+   593→    const read = Math.round(delivered * (0.7 + Math.random() * 0.25));
+   594→    const received = Math.round(sent * (0.5 + Math.random() * 0.4));
+   595→    const failed = sent - delivered;
+   596→    statRows.push({
+   597→      date: d.toISOString().slice(0, 10),
+   598→      sent,
+   599→      delivered,
+   600→      read,
+   601→      received,
+   602→      failed,
+   603→    });
+   604→  }
+   605→  await db.dailyStat.createMany({ data: statRows });
+   606→
+   607→  // ---------- BACKUPS ----------
+   608→  await db.chatBackup.createMany({
+   609→    data: [
+   610→      { sizeKb: 18432, messageCount: 8642, auto: true, createdAt: days(1) },
+   611→      { sizeKb: 16890, messageCount: 7911, auto: true, createdAt: days(2) },
+   612→      { sizeKb: 15234, messageCount: 7102, auto: false, createdAt: days(5) },
+   613→    ],
+   614→  });
+   615→
+   616→  console.log("✅ Seed selesai: profile, 8 label, 10 kontak, 8 chat, produk, story, siaran, channel, komunitas, perangkat, statistik, backup");
+   617→  console.log(`   chat ids: budi=${chatBudi.id} siti=${chatSiti.id} group=${chatGroup.id}`);
+   618→}
+   619→
+   620→main()
+   621→  .catch((e) => {
+   622→    console.error(e);
+   623→    process.exit(1);
+   624→  })
+   625→  .finally(() => db.$disconnect());
+   626→

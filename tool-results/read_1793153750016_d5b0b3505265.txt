@@ -1,0 +1,991 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     4→     4→import {
+     5→     5→  ArrowLeft,
+     6→     6→  Ban,
+     7→     7→  Bookmark,
+     8→     8→  ChevronDown,
+     9→     9→  CircleSlash,
+    10→    10→  Download,
+    11→    11→  Eraser,
+    12→    12→  Heart,
+    13→    13→  Info,
+    14→    14→  ListChecks,
+    15→    15→  MessageSquareWarning,
+    16→    16→  MessageSquareX,
+    17→    17→  Palette,
+    18→    18→  Phone,
+    19→    19→  Search,
+    20→    20→  ShieldCheck,
+    21→    21→  SquareCheckBig,
+    22→    22→  Timer,
+    23→    23→  Trash2,
+    24→    24→  UserRoundPlus,
+    25→    25→  Video,
+    26→    26→  X,
+    27→    27→} from "lucide-react";
+    28→    28→import { cn, timeAgo, waDayLabel, formatTime } from "@/lib/wa-utils";
+    29→    29→import { useToast } from "@/hooks/use-toast";
+    30→    30→import { useBusinessProfile } from "@/lib/useBusinessProfile";
+    31→    31→import { Button } from "@/components/ui/button";
+    32→    32→import { Input } from "@/components/ui/input";
+    33→    33→import { Label } from "@/components/ui/label";
+    34→    34→import { Checkbox } from "@/components/ui/checkbox";
+    35→    35→import { Skeleton } from "@/components/ui/skeleton";
+    36→    36→import {
+    37→    37→  DropdownMenu,
+    38→    38→  DropdownMenuContent,
+    39→    39→  DropdownMenuItem,
+    40→    40→  DropdownMenuSeparator,
+    41→    41→  DropdownMenuSub,
+    42→    42→  DropdownMenuSubContent,
+    43→    43→  DropdownMenuSubTrigger,
+    44→    44→  DropdownMenuTrigger,
+    45→    45→} from "@/components/ui/dropdown-menu";
+    46→    46→import MessageBubble from "./MessageBubble";
+    47→    47→import Composer from "./Composer";
+    48→    48→import CallDialog from "./CallDialog";
+    49→    49→import ChatInfoSheet from "./ChatInfoSheet";
+    50→    50→import ChatAvatar from "./ChatAvatar";
+    51→    51→import {
+    52→    52→  ConfirmDialog,
+    53→    53→  DisappearingDialog,
+    54→    54→  LabelsPickDialog,
+    55→    55→  ChatThemeDialog,
+    56→    56→  themeBg,
+    57→    57→} from "./ChatMenus";
+    58→    58→import type { ChatMessage, ChatSummary, Participant, ProductRow } from "./types";
+    59→    59→
+    60→    60→interface ConversationPanelProps {
+    61→    61→  chat: ChatSummary;
+    62→    62→  onBack: () => void;
+    63→    63→  onChatUpdated: () => void;
+    64→    64→}
+    65→    65→
+    66→    66→const MEDIA_TYPES = ["IMAGE", "VIDEO", "AUDIO", "DOC"];
+    67→    67→
+    68→    68→const DISAPPEARING_LABEL: Record<string, string> = {
+    69→    69→  off: "",
+    70→    70→  "24h": "24 jam",
+    71→    71→  "7d": "7 hari",
+    72→    72→  "90d": "90 hari",
+    73→    73→};
+    74→    74→
+    75→    75→export default function ConversationPanel({ chat, onBack, onChatUpdated }: ConversationPanelProps) {
+    76→    76→  const { toast } = useToast();
+    77→    77→  const business = useBusinessProfile();
+    78→    78→  const [messages, setMessages] = useState<ChatMessage[]>([]);
+    79→    79→  const [participants, setParticipants] = useState<Participant[]>([]);
+    80→    80→  const [loading, setLoading] = useState(true);
+    81→    81→  const [infoOpen, setInfoOpen] = useState(false);
+    82→    82→  const [callKind, setCallKind] = useState<"VOICE" | "VIDEO" | null>(null);
+    83→    83→  const [productsMap, setProductsMap] = useState<Map<string, ProductRow>>(new Map());
+    84→    84→
+    85→    85→  // ---------- Fitur menu baru ----------
+    86→    86→  const [searchOpen, setSearchOpen] = useState(false);
+    87→    87→  const [searchQuery, setSearchQuery] = useState("");
+    88→    88→  const [selectMode, setSelectMode] = useState(false);
+    89→    89→  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
+    90→    90→  const [labelsOpen, setLabelsOpen] = useState(false);
+    91→    91→  const [disappearingOpen, setDisappearingOpen] = useState(false);
+    92→    92→  const [themeOpen, setThemeOpen] = useState(false);
+    93→    93→  const [themeCss, setThemeCss] = useState("");
+    94→    94→  const [contactEditOpen, setContactEditOpen] = useState(false);
+    95→    95→  const [contactName, setContactName] = useState("");
+    96→    96→  const [reportOpen, setReportOpen] = useState(false);
+    97→    97→  const [reportBlock, setReportBlock] = useState(true);
+    98→    98→  const [blockOpen, setBlockOpen] = useState(false);
+    99→    99→  const [clearOpen, setClearOpen] = useState(false);
+   100→   100→  const [deleteOpen, setDeleteOpen] = useState(false);
+   101→   101→
+   102→   102→  const scrollRef = useRef<HTMLDivElement | null>(null);
+   103→   103→  const atBottomRef = useRef(true);
+   104→   104→
+   105→   105→  // ---------- Muat pesan ----------
+   106→   106→  const loadMessages = useCallback(
+   107→   107→    async (silent = false) => {
+   108→   108→      if (!silent) setLoading(true);
+   109→   109→      try {
+   110→   110→        const res = await fetch(`/api/chats/${chat.id}/messages`, { cache: "no-store" });
+   111→   111→        const data = (await res.json()) as {
+   112→   112→          messages?: ChatMessage[];
+   113→   113→          participants?: Participant[];
+   114→   114→          error?: string;
+   115→   115→        };
+   116→   116→        if (res.ok) {
+   117→   117→          setMessages(data.messages ?? []);
+   118→   118→          setParticipants(data.participants ?? []);
+   119→   119→        }
+   120→   120→      } catch {
+   121→   121→        if (!silent) toast({ title: "Gagal memuat pesan", variant: "destructive" });
+   122→   122→      } finally {
+   123→   123→        if (!silent) setLoading(false);
+   124→   124→      }
+   125→   125→    },
+   126→   126→    [chat.id, toast]
+   127→   127→  );
+   128→   128→
+   129→   129→  useEffect(() => {
+   130→   130→    atBottomRef.current = true;
+   131→   131→    void loadMessages();
+   132→   132→  }, [loadMessages]);
+   133→   133→
+   134→   134→  // Tema latar tersimpan per chat
+   135→   135→  useEffect(() => {
+   136→   136→    setThemeCss(themeBg(chat.id));
+   137→   137→    setSearchOpen(false);
+   138→   138→    setSearchQuery("");
+   139→   139→    exitSelect();
+   140→   140→  }, [chat.id]);
+   141→   141→
+   142→   142→  function exitSelect() {
+   143→   143→    setSelectMode(false);
+   144→   144→    setSelectedMsgIds(new Set());
+   145→   145→  }
+   146→   146→
+   147→   147→  // Tandai sudah dibaca saat chat dibuka
+   148→   148→  useEffect(() => {
+   149→   149→    if (chat.unread > 0) {
+   150→   150→      void fetch(`/api/chats/${chat.id}`, {
+   151→   151→        method: "PATCH",
+   152→   152→        headers: { "Content-Type": "application/json" },
+   153→   153→        body: JSON.stringify({ unread: 0 }),
+   154→   154→      }).then(() => onChatUpdated());
+   155→   155→    }
+   156→   156→  }, [chat.id]);
+   157→   157→
+   158→   158→  // Polling pesan setiap 15 detik (dilewati saat ada pesan optimist)
+   159→   159→  useEffect(() => {
+   160→   160→    const t = setInterval(() => {
+   161→   161→      const hasPending = messages.some((m) => m.id.startsWith("tmp-"));
+   162→   162→      if (!hasPending) void loadMessages(true);
+   163→   163→    }, 15_000);
+   164→   164→    return () => clearInterval(t);
+   165→   165→  }, [loadMessages, messages]);
+   166→   166→
+   167→   167→  // Auto-scroll ke bawah
+   168→   168→  useEffect(() => {
+   169→   169→    const el = scrollRef.current;
+   170→   170→    if (!el) return;
+   171→   171→    const last = messages[messages.length - 1];
+   172→   172→    if (atBottomRef.current || last?.sender === "me") {
+   173→   173→      el.scrollTop = el.scrollHeight;
+   174→   174→    }
+   175→   175→  }, [messages]);
+   176→   176→
+   177→   177→  // Data produk untuk kartu PRODUCT
+   178→   178→  useEffect(() => {
+   179→   179→    if (productsMap.size > 0) return;
+   180→   180→    if (!messages.some((m) => m.type === "PRODUCT")) return;
+   181→   181→    fetch("/api/products", { cache: "no-store" })
+   182→   182→      .then((r) => r.json())
+   183→   183→      .then((d: { products?: ProductRow[] }) => {
+   184→   184→        setProductsMap(new Map((d.products ?? []).map((p) => [p.id, p])));
+   185→   185→      })
+   186→   186→      .catch(() => setProductsMap(new Map()));
+   187→   187→  }, [messages, productsMap.size]);
+   188→   188→
+   189→   189→  const handleScroll = () => {
+   190→   190→    const el = scrollRef.current;
+   191→   191→    if (!el) return;
+   192→   192→    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+   193→   193→  };
+   194→   194→
+   195→   195→  // ---------- Kirim pesan (alur WA: PENDING → SENT → DELIVERED → balasan) ----------
+   196→   196→  const sendMessage = useCallback(
+   197→   197→    (payload: Partial<ChatMessage> & { type: string }) => {
+   198→   198→      const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+   199→   199→      const optimistic: ChatMessage = {
+   200→   200→        id: tempId,
+   201→   201→        chatId: chat.id,
+   202→   202→        sender: "me",
+   203→   203→        senderName: "Anda",
+   204→   204→        senderColorKey: "emerald",
+   205→   205→        type: payload.type,
+   206→   206→        body: payload.body ?? "",
+   207→   207→        mediaUrl: payload.mediaUrl ?? null,
+   208→   208→        mediaName: payload.mediaName ?? null,
+   209→   209→        mediaMime: payload.mediaMime ?? null,
+   210→   210→        mediaSize: payload.mediaSize ?? null,
+   211→   211→        latitude: payload.latitude ?? null,
+   212→   212→        longitude: payload.longitude ?? null,
+   213→   213→        placeName: payload.placeName ?? null,
+   214→   214→        cardName: payload.cardName ?? null,
+   215→   215→        cardPhone: payload.cardPhone ?? null,
+   216→   216→        productId: payload.productId ?? null,
+   217→   217→        status: "PENDING",
+   218→   218→        createdAt: new Date().toISOString(),
+   219→   219→      };
+   220→   220→      atBottomRef.current = true;
+   221→   221→      setMessages((prev) => [...prev, optimistic]);
+   222→   222→
+   223→   223→      void (async () => {
+   224→   224→        try {
+   225→   225→          const res = await fetch(`/api/chats/${chat.id}/messages`, {
+   226→   226→            method: "POST",
+   227→   227→            headers: { "Content-Type": "application/json" },
+   228→   228→            body: JSON.stringify(payload),
+   229→   229→          });
+   230→   230→          const data = (await res.json()) as { message?: ChatMessage; error?: string };
+   231→   231→          if (!res.ok || !data.message) throw new Error(data.error || "Gagal mengirim pesan");
+   232→   232→          const serverMsg = data.message;
+   233→   233→          setMessages((prev) => prev.map((m) => (m.id === tempId ? serverMsg : m)));
+   234→   234→          onChatUpdated();
+   235→   235→
+   236→   236→          // Simulasi pesan tersampaikan
+   237→   237→          setTimeout(() => {
+   238→   238→            void fetch("/api/simulate/progress", {
+   239→   239→              method: "POST",
+   240→   240→              headers: { "Content-Type": "application/json" },
+   241→   241→              body: JSON.stringify({ chatId: chat.id }),
+   242→   242→            })
+   243→   243→              .then(() => {
+   244→   244→                setMessages((prev) => prev.map((m) => (m.id === serverMsg.id ? { ...m, status: "DELIVERED" } : m)));
+   245→   245→              })
+   246→   246→              .catch(() => {});
+   247→   247→          }, 900);
+   248→   248→
+   249→   249→          // Simulasi balasan kontak
+   250→   250→          setTimeout(() => {
+   251→   251→            void fetch("/api/simulate/reply", {
+   252→   252→              method: "POST",
+   253→   253→              headers: { "Content-Type": "application/json" },
+   254→   254→              body: JSON.stringify({ chatId: chat.id }),
+   255→   255→            })
+   256→   256→              .then((r) => r.json())
+   257→   257→              .then((d: { message?: ChatMessage }) => {
+   258→   258→                if (d.message) {
+   259→   259→                  setMessages((prev) =>
+   260→   260→                    prev.some((x) => x.id === d.message!.id) ? prev : [...prev, d.message!]
+   261→   261→                  );
+   262→   262→                  atBottomRef.current = true;
+   263→   263→                  onChatUpdated();
+   264→   264→                }
+   265→   265→              })
+   266→   266→              .catch(() => {});
+   267→   267→          }, 2500 + Math.floor(Math.random() * 2500));
+   268→   268→        } catch (err) {
+   269→   269→          setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "FAILED" } : m)));
+   270→   270→          toast({
+   271→   271→            title: "Pesan gagal dikirim",
+   272→   272→            description: err instanceof Error ? err.message : "Periksa koneksi lalu coba lagi.",
+   273→   273→            variant: "destructive",
+   274→   274→          });
+   275→   275→        }
+   276→   276→      })();
+   277→   277→    },
+   278→   278→    [chat.id, onChatUpdated, toast]
+   279→   279→  );
+   280→   280→
+   281→   281→  // ---------- Hapus pesan ----------
+   282→   282→  const deleteMessage = useCallback(
+   283→   283→    (id: string) => {
+   284→   284→      setMessages((prev) => prev.filter((m) => m.id !== id));
+   285→   285→      if (id.startsWith("tmp-")) return;
+   286→   286→      void fetch(`/api/messages/${id}`, { method: "DELETE" })
+   287→   287→        .then(() => onChatUpdated())
+   288→   288→        .catch(() => toast({ title: "Gagal menghapus pesan", variant: "destructive" }));
+   289→   289→    },
+   290→   290→    [onChatUpdated, toast]
+   291→   291→  );
+   292→   292→
+   293→   293→  // ---------- Buka blokir ----------
+   294→   294→  const unblockContact = useCallback(() => {
+   295→   295→    const contactId = chat.contact?.id;
+   296→   296→    if (!contactId) return;
+   297→   297→    void fetch(`/api/contacts/${contactId}`, {
+   298→   298→      method: "PATCH",
+   299→   299→      headers: { "Content-Type": "application/json" },
+   300→   300→      body: JSON.stringify({ blocked: false }),
+   301→   301→    })
+   302→   302→      .then(() => {
+   303→   303→        toast({ title: "Blokir dibuka", description: chat.contact?.name });
+   304→   304→        onChatUpdated();
+   305→   305→      })
+   306→   306→      .catch(() => toast({ title: "Gagal membuka blokir", variant: "destructive" }));
+   307→   307→  }, [chat.contact?.id, chat.contact?.name, onChatUpdated, toast]);
+   308→   308→
+   309→   309→  // ---------- Aksi menu chat ----------
+   310→   310→  const patchChat = useCallback(
+   311→   311→    async (patch: Record<string, unknown>, okTitle: string) => {
+   312→   312→      try {
+   313→   313→        const res = await fetch(`/api/chats/${chat.id}`, {
+   314→   314→          method: "PATCH",
+   315→   315→          headers: { "Content-Type": "application/json" },
+   316→   316→          body: JSON.stringify(patch),
+   317→   317→        });
+   318→   318→        if (!res.ok) throw new Error();
+   319→   319→        onChatUpdated();
+   320→   320→        toast({ title: okTitle });
+   321→   321→      } catch {
+   322→   322→        toast({ title: "Gagal memperbarui obrolan", variant: "destructive" });
+   323→   323→      }
+   324→   324→    },
+   325→   325→    [chat.id, onChatUpdated, toast]
+   326→   326→  );
+   327→   327→
+   328→   328→  const muteChat = (durationLabel: string) => {
+   329→   329→    void patchChat({ muted: true }, `Notifikasi dibisukan (${durationLabel})`);
+   330→   330→  };
+   331→   331→
+   332→   332→  const saveContactName = async () => {
+   333→   333→    const contactId = chat.contact?.id;
+   334→   334→    if (!contactId) return;
+   335→   335→    const name = contactName.trim();
+   336→   336→    if (!name) return;
+   337→   337→    try {
+   338→   338→      const res = await fetch(`/api/contacts/${contactId}`, {
+   339→   339→        method: "PATCH",
+   340→   340→        headers: { "Content-Type": "application/json" },
+   341→   341→        body: JSON.stringify({ name }),
+   342→   342→      });
+   343→   343→      if (!res.ok) throw new Error();
+   344→   344→      setContactEditOpen(false);
+   345→   345→      toast({ title: "Kontak disimpan", description: name });
+   346→   346→      onChatUpdated();
+   347→   347→    } catch {
+   348→   348→      toast({ title: "Gagal menyimpan kontak", variant: "destructive" });
+   349→   349→    }
+   350→   350→  };
+   351→   351→
+   352→   352→  const exportChat = () => {
+   353→   353→    const lines = messages.map((m) => {
+   354→   354→      const who = m.sender === "me" ? "Anda" : m.sender === "system" ? "Sistem" : m.senderName ?? chat.name;
+   355→   355→      const text = m.body || `[${m.type.toLowerCase()}]`;
+   356→   356→      return `[${waDayLabel(m.createdAt)} ${formatTime(m.createdAt)}] ${who}: ${text}`;
+   357→   357→    });
+   358→   358→    const content =
+   359→   359→      `Obrolan dengan ${chat.name}\n` +
+   360→   360→      `Diekspor dari ${business.businessName} · ${new Date().toLocaleString("id-ID")}\n` +
+   361→   361→      `${"-".repeat(40)}\n\n${lines.join("\n")}\n`;
+   362→   362→    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+   363→   363→    const url = URL.createObjectURL(blob);
+   364→   364→    const a = document.createElement("a");
+   365→   365→    a.href = url;
+   366→   366→    a.download = `Obrolan ${chat.name}.txt`;
+   367→   367→    a.click();
+   368→   368→    URL.revokeObjectURL(url);
+   369→   369→    toast({ title: "Obrolan diekspor", description: "Tersimpan sebagai berkas .txt" });
+   370→   370→  };
+   371→   371→
+   372→   372→  const clearMessages = async () => {
+   373→   373→    try {
+   374→   374→      const res = await fetch(`/api/chats/${chat.id}/messages`, { method: "DELETE" });
+   375→   375→      if (!res.ok) throw new Error();
+   376→   376→      setMessages([]);
+   377→   377→      onChatUpdated();
+   378→   378→      toast({ title: "Obrolan dibersihkan" });
+   379→   379→    } catch {
+   380→   380→      toast({ title: "Gagal membersihkan obrolan", variant: "destructive" });
+   381→   381→    }
+   382→   382→  };
+   383→   383→
+   384→   384→  const deleteChat = async () => {
+   385→   385→    try {
+   386→   386→      const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
+   387→   387→      if (!res.ok) throw new Error();
+   388→   388→      toast({ title: "Obrolan dihapus" });
+   389→   389→      onBack();
+   390→   390→      onChatUpdated();
+   391→   391→    } catch {
+   392→   392→      toast({ title: "Gagal menghapus obrolan", variant: "destructive" });
+   393→   393→    }
+   394→   394→  };
+   395→   395→
+   396→   396→  const reportChat = async () => {
+   397→   397→    if (reportBlock && chat.contact?.id) {
+   398→   398→      try {
+   399→   399→        await fetch(`/api/contacts/${chat.contact.id}`, {
+   400→   400→          method: "PATCH",
+   401→   401→          headers: { "Content-Type": "application/json" },
+   402→   402→          body: JSON.stringify({ blocked: true }),
+   403→   403→        });
+   404→   404→        onChatUpdated();
+   405→   405→      } catch {
+   406→   406→        // laporan tetap terkirim
+   407→   407→      }
+   408→   408→    }
+   409→   409→    toast({ title: "Laporan terkirim", description: "Terima kasih. Tim kami akan meninjaunya." });
+   410→   410→  };
+   411→   411→
+   412→   412→  const blockContact = () => {
+   413→   413→    const contactId = chat.contact?.id;
+   414→   414→    if (!contactId) return;
+   415→   415→    void fetch(`/api/contacts/${contactId}`, {
+   416→   416→      method: "PATCH",
+   417→   417→      headers: { "Content-Type": "application/json" },
+   418→   418→      body: JSON.stringify({ blocked: true }),
+   419→   419→    })
+   420→   420→      .then(() => {
+   421→   421→        toast({ title: "Kontak diblokir", description: chat.contact?.name });
+   422→   422→        onChatUpdated();
+   423→   423→      })
+   424→   424→      .catch(() => toast({ title: "Gagal memblokir kontak", variant: "destructive" }));
+   425→   425→  };
+   426→   426→
+   427→   427→  const copyCallLink = () => {
+   428→   428→    const link = `https://call.whatsapp.com/${Math.random().toString(36).slice(2, 12)}`;
+   429→   429→    void navigator.clipboard
+   430→   430→      ?.writeText(link)
+   431→   431→      .then(() => toast({ title: "Tautan panggilan disalin", description: link }))
+   432→   432→      .catch(() => toast({ title: "Tautan panggilan", description: link }));
+   433→   433→  };
+   434→   434→
+   435→   435→  // ---------- Info header ----------
+   436→   436→  const presence = useMemo(() => {
+   437→   437→    if (chat.type === "GROUP") {
+   438→   438→      if (participants.length === 0) return "memuat anggota…";
+   439→   439→      const shown = participants.slice(0, 3).map((p) => p.name).join(", ");
+   440→   440→      const more = participants.length > 3 ? ` +${participants.length - 3} lainnya` : "";
+   441→   441→      return `Anda, ${shown}${more}`;
+   442→   442→    }
+   443→   443→    const c = chat.contact;
+   444→   444→    if (!c) return "";
+   445→   445→    if (c.blocked) return "diblokir";
+   446→   446→    if (c.lastSeen && Date.now() - new Date(c.lastSeen).getTime() < 2 * 60_000) return "online";
+   447→   447→    if (c.lastSeen) return `terakhir dilihat ${timeAgo(c.lastSeen)}`;
+   448→   448→    return "offline";
+   449→   449→  }, [chat.type, chat.contact, participants]);
+   450→   450→
+   451→   451→  const isOnline = presence === "online";
+   452→   452→  const mediaCount = messages.filter((m) => MEDIA_TYPES.includes(m.type)).length;
+   453→   453→
+   454→   454→  // ---------- Pencarian dalam chat ----------
+   455→   455→  const q = searchQuery.trim().toLowerCase();
+   456→   456→  const visibleMessages = useMemo(() => {
+   457→   457→    if (!q) return messages;
+   458→   458→    return messages.filter(
+   459→   459→      (m) =>
+   460→   460→        (m.body ?? "").toLowerCase().includes(q) ||
+   461→   461→        (m.mediaName ?? "").toLowerCase().includes(q) ||
+   462→   462→        (m.placeName ?? "").toLowerCase().includes(q)
+   463→   463→    );
+   464→   464→  }, [messages, q]);
+   465→   465→
+   466→   466→  // ---------- Render pesan dengan pemisah hari ----------
+   467→   467→  const rendered = useMemo(() => {
+   468→   468→    const items: React.ReactNode[] = [];
+   469→   469→    let lastDay = "";
+   470→   470→    for (const m of visibleMessages) {
+   471→   471→      const day = waDayLabel(m.createdAt);
+   472→   472→      if (day !== lastDay) {
+   473→   473→        items.push(
+   474→   474→          <div key={`day-${m.id}`} className="flex justify-center my-3 px-4">
+   475→   475→            <span className="bg-white/85 dark:bg-secondary text-muted-foreground text-xs px-3 py-1 rounded-lg shadow-sm">{day}</span>
+   476→   476→          </div>
+   477→   477→        );
+   478→   478→        lastDay = day;
+   479→   479→      }
+   480→   480→      items.push(
+   481→   481→        <MessageBubble
+   482→   482→          key={m.id}
+   483→   483→          message={m}
+   484→   484→          isGroup={chat.type === "GROUP"}
+   485→   485→          product={m.productId ? productsMap.get(m.productId) : undefined}
+   486→   486→          onDelete={deleteMessage}
+   487→   487→          selectMode={selectMode}
+   488→   488→          selected={selectedMsgIds.has(m.id)}
+   489→   489→          onToggleSelect={() =>
+   490→   490→            setSelectedMsgIds((prev) => {
+   491→   491→              const next = new Set(prev);
+   492→   492→              if (next.has(m.id)) next.delete(m.id);
+   493→   493→              else next.add(m.id);
+   494→   494→              return next;
+   495→   495→            })
+   496→   496→          }
+   497→   497→        />
+   498→   498→      );
+   499→   499→    }
+   500→   500→    return items;
+   501→   501→  }, [visibleMessages, chat.type, productsMap, deleteMessage, selectMode, selectedMsgIds]);
+   502→   502→
+   503→   503→  const isPrivate = chat.type === "PRIVATE";
+   504→   504→  const contactLabelIds: string[] = useMemo(() => {
+   505→   505→    try {
+   506→   506→      return JSON.parse(chat.contact?.labelIds ?? "[]") as string[];
+   507→   507→    } catch {
+   508→   508→      return [];
+   509→   509→    }
+   510→   510→  }, [chat.contact?.labelIds]);
+   511→   511→
+   512→   512→  return (
+   513→   513→    <div className="flex flex-col h-full flex-1 w-full min-w-0 bg-[#f0f2f5] dark:bg-[#0b141a]">
+   514→   514→      {/* Header percakapan */}
+   515→   515→      <header className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 h-14 border-b border-border bg-[#f0f2f5] dark:bg-[#111b21] shrink-0">
+   516→   516→        <Button
+   517→   517→          variant="ghost"
+   518→   518→          size="icon"
+   519→   519→          className="md:hidden shrink-0"
+   520→   520→          onClick={onBack}
+   521→   521→          aria-label="Kembali ke daftar chat"
+   522→   522→        >
+   523→   523→          <ArrowLeft className="h-5 w-5" />
+   524→   524→        </Button>
+   525→   525→        <button
+   526→   526→          type="button"
+   527→   527→          onClick={() => setInfoOpen(true)}
+   528→   528→          className="flex items-center gap-3 flex-1 min-w-0 text-left rounded-lg px-1 py-1 hover:bg-black/5 transition-colors"
+   529→   529→          aria-label={`Info ${chat.name}`}
+   530→   530→        >
+   531→   531→          <ChatAvatar name={chat.name} colorKey={chat.colorKey} avatarUrl={chat.avatarUrl} />
+   532→   532→          <div className="min-w-0">
+   533→   533→            <div className="flex items-center gap-1.5">
+   534→   534→              <p className="font-semibold text-[15px] truncate">{chat.name}</p>
+   535→   535→              {chat.isBusinessChat && (
+   536→   536→                <>
+   537→   537→                  <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" aria-label="Chat bisnis" />
+   538→   538→                  <span className="text-[10px] text-primary font-medium shrink-0">Bisnis</span>
+   539→   539→                </>
+   540→   540→              )}
+   541→   541→              {chat.disappearing !== "off" && (
+   542→   542→                <span
+   543→   543→                  className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0"
+   544→   544→                  title={`Pesan sementara: ${DISAPPEARING_LABEL[chat.disappearing]}`}
+   545→   545→                >
+   546→   546→                  <Timer className="h-3 w-3" /> {DISAPPEARING_LABEL[chat.disappearing]}
+   547→   547→                </span>
+   548→   548→              )}
+   549→   549→              {chat.favorite && <Heart className="h-3 w-3 text-rose-500 fill-rose-500 shrink-0" aria-label="Favorit" />}
+   550→   550→            </div>
+   551→   551→            <p className={cn("text-xs truncate", isOnline ? "text-primary font-medium" : "text-muted-foreground")}>
+   552→   552→              {presence}
+   553→   553→            </p>
+   554→   554→          </div>
+   555→   555→        </button>
+   556→   556→
+   557→   557→        {/* Tambah ke daftar (dropdown) — sesuai WhatsApp Web */}
+   558→   558→        <DropdownMenu>
+   559→   559→          <DropdownMenuTrigger asChild>
+   560→   560→            <Button
+   561→   561→              variant="ghost"
+   562→   562→              className="hidden lg:inline-flex items-center gap-1.5 h-9 px-2.5 shrink-0 text-[13px] text-muted-foreground hover:text-foreground"
+   563→   563→              aria-label="Tambah ke daftar"
+   564→   564→            >
+   565→   565→              <Bookmark className="h-4 w-4" />
+   566→   566→              <span className="hidden xl:inline">{contactLabelIds.length > 0 ? "Di daftar" : "Tambah ke daftar"}</span>
+   567→   567→              <ChevronDown className="h-3.5 w-3.5" />
+   568→   568→            </Button>
+   569→   569→          </DropdownMenuTrigger>
+   570→   570→          <DropdownMenuContent align="end" className="w-52">
+   571→   571→            {isPrivate && chat.contact ? (
+   572→   572→              <>
+   573→   573→                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => setLabelsOpen(true)}>
+   574→   574→                  <Bookmark className="h-4 w-4" /> Atur daftar…
+   575→   575→                </DropdownMenuItem>
+   576→   576→                <DropdownMenuItem
+   577→   577→                  className="gap-2 cursor-pointer"
+   578→   578→                  onClick={() => void patchChat({ favorite: !chat.favorite }, chat.favorite ? "Dihapus dari favorit" : "Ditambahkan ke favorit")}
+   579→   579→                >
+   580→   580→                  <Heart className={cn("h-4 w-4", chat.favorite && "text-rose-500 fill-rose-500")} />
+   581→   581→                  {chat.favorite ? "Hapus dari favorit" : "Tambah ke favorit"}
+   582→   582→                </DropdownMenuItem>
+   583→   583→              </>
+   584→   584→            ) : (
+   585→   585→              <DropdownMenuItem disabled className="gap-2">
+   586→   586→                <Bookmark className="h-4 w-4" /> Hanya untuk chat pribadi
+   587→   587→              </DropdownMenuItem>
+   588→   588→            )}
+   589→   589→          </DropdownMenuContent>
+   590→   590→        </DropdownMenu>
+   591→   591→
+   592→   592→        {/* Panggilan: video + dropdown */}
+   593→   593→        {isPrivate && (
+   594→   594→          <div className="flex items-center shrink-0">
+   595→   595→            <Button
+   596→   596→              variant="ghost"
+   597→   597→              size="icon"
+   598→   598→              aria-label="Panggilan video"
+   599→   599→              onClick={() => setCallKind("VIDEO")}
+   600→   600→              className="rounded-r-none"
+   601→   601→            >
+   602→   602→              <Video className="h-[18px] w-[18px] text-muted-foreground" />
+   603→   603→            </Button>
+   604→   604→            <DropdownMenu>
+   605→   605→              <DropdownMenuTrigger asChild>
+   606→   606→                <Button variant="ghost" size="icon" aria-label="Opsi panggilan" className="rounded-l-none px-0.5 -ml-1">
+   607→   607→                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+   608→   608→                </Button>
+   609→   609→              </DropdownMenuTrigger>
+   610→   610→              <DropdownMenuContent align="end" className="w-52">
+   611→   611→                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => setCallKind("VIDEO")}>
+   612→   612→                  <Video className="h-4 w-4" /> Panggilan video
+   613→   613→                </DropdownMenuItem>
+   614→   614→                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => setCallKind("VOICE")}>
+   615→   615→                  <Phone className="h-4 w-4" /> Panggilan suara
+   616→   616→                </DropdownMenuItem>
+   617→   617→                <DropdownMenuSeparator />
+   618→   618→                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={copyCallLink}>
+   619→   619→                  <Download className="h-4 w-4" /> Buat tautan panggilan
+   620→   620→                </DropdownMenuItem>
+   621→   621→              </DropdownMenuContent>
+   622→   622→            </DropdownMenu>
+   623→   623→          </div>
+   624→   624→        )}
+   625→   625→
+   626→   626→        <Button
+   627→   627→          variant="ghost"
+   628→   628→          size="icon"
+   629→   629→          aria-label="Cari di obrolan"
+   630→   630→          aria-pressed={searchOpen}
+   631→   631→          onClick={() => {
+   632→   632→            setSearchOpen((v) => !v);
+   633→   633→            if (searchOpen) setSearchQuery("");
+   634→   634→          }}
+   635→   635→          className="shrink-0"
+   636→   636→        >
+   637→   637→          <Search className="h-[18px] w-[18px] text-muted-foreground" />
+   638→   638→        </Button>
+   639→   639→
+   640→   640→        {/* Menu opsi obrolan (⋮) — sesuai WhatsApp Web */}
+   641→   641→        <DropdownMenu>
+   642→   642→          <DropdownMenuTrigger asChild>
+   643→   643→            <Button variant="ghost" size="icon" aria-label="Menu obrolan" className="shrink-0">
+   644→   644→              <svg viewBox="0 0 24 24" className="h-5 w-5 text-muted-foreground" fill="currentColor" aria-hidden="true">
+   645→   645→                <circle cx="12" cy="5" r="1.8" />
+   646→   646→                <circle cx="12" cy="12" r="1.8" />
+   647→   647→                <circle cx="12" cy="19" r="1.8" />
+   648→   648→              </svg>
+   649→   649→            </Button>
+   650→   650→          </DropdownMenuTrigger>
+   651→   651→          <DropdownMenuContent align="end" className="w-60">
+   652→   652→            <DropdownMenuItem
+   653→   653→              className="gap-2.5 cursor-pointer"
+   654→   654→              disabled={!isPrivate || !chat.contact}
+   655→   655→              onClick={() => {
+   656→   656→                setContactName(chat.contact?.name ?? "");
+   657→   657→                setContactEditOpen(true);
+   658→   658→              }}
+   659→   659→            >
+   660→   660→              <UserRoundPlus className="h-4 w-4" /> Tambah ke kontak
+   661→   661→            </DropdownMenuItem>
+   662→   662→            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setInfoOpen(true)}>
+   663→   663→              <Info className="h-4 w-4" /> Info {isPrivate ? "kontak" : "grup"}
+   664→   664→            </DropdownMenuItem>
+   665→   665→            <DropdownMenuItem
+   666→   666→              className="gap-2.5 cursor-pointer"
+   667→   667→              onClick={() => {
+   668→   668→                setSearchOpen(true);
+   669→   669→                setTimeout(() => (document.getElementById("chat-search-input") as HTMLElement | null)?.focus(), 50);
+   670→   670→              }}
+   671→   671→            >
+   672→   672→              <Search className="h-4 w-4" /> Cari
+   673→   673→            </DropdownMenuItem>
+   674→   674→            <DropdownMenuItem
+   675→   675→              className="gap-2.5 cursor-pointer"
+   676→   676→              onClick={() => {
+   677→   677→                setSelectMode(true);
+   678→   678→                setSelectedMsgIds(new Set());
+   679→   679→              }}
+   680→   680→            >
+   681→   681→              <SquareCheckBig className="h-4 w-4" /> Pilih pesan
+   682→   682→            </DropdownMenuItem>
+   683→   683→            {chat.muted ? (
+   684→   684→              <DropdownMenuItem
+   685→   685→                className="gap-2.5 cursor-pointer"
+   686→   686→                onClick={() => void patchChat({ muted: false }, "Notifikasi dinyalakan")}
+   687→   687→              >
+   688→   688→                <Ban className="h-4 w-4" /> Bunyikan notifikasi
+   689→   689→              </DropdownMenuItem>
+   690→   690→            ) : (
+   691→   691→              <DropdownMenuSub>
+   692→   692→                <DropdownMenuSubTrigger className="gap-2.5">
+   693→   693→                  <Ban className="h-4 w-4" /> Bisukan notifikasi
+   694→   694→                </DropdownMenuSubTrigger>
+   695→   695→                <DropdownMenuSubContent className="w-44">
+   696→   696→                  <DropdownMenuItem onClick={() => muteChat("8 jam")}>8 jam</DropdownMenuItem>
+   697→   697→                  <DropdownMenuItem onClick={() => muteChat("1 minggu")}>1 minggu</DropdownMenuItem>
+   698→   698→                  <DropdownMenuItem onClick={() => muteChat("Selalu")}>Selalu</DropdownMenuItem>
+   699→   699→                </DropdownMenuSubContent>
+   700→   700→              </DropdownMenuSub>
+   701→   701→            )}
+   702→   702→            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setDisappearingOpen(true)}>
+   703→   703→              <Timer className="h-4 w-4" /> Pesan sementara
+   704→   704→            </DropdownMenuItem>
+   705→   705→            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setThemeOpen(true)}>
+   706→   706→              <Palette className="h-4 w-4" /> Tema obrolan
+   707→   707→            </DropdownMenuItem>
+   708→   708→            <DropdownMenuItem
+   709→   709→              className="gap-2.5 cursor-pointer"
+   710→   710→              onClick={() => void patchChat({ favorite: !chat.favorite }, chat.favorite ? "Dihapus dari favorit" : "Ditambahkan ke favorit")}
+   711→   711→            >
+   712→   712→              <Heart className={cn("h-4 w-4", chat.favorite && "text-rose-500 fill-rose-500")} />
+   713→   713→              {chat.favorite ? "Hapus dari favorit" : "Tambah ke favorit"}
+   714→   714→            </DropdownMenuItem>
+   715→   715→            <DropdownMenuItem
+   716→   716→              className="gap-2.5 cursor-pointer"
+   717→   717→              disabled={!isPrivate || !chat.contact}
+   718→   718→              onClick={() => setLabelsOpen(true)}
+   719→   719→            >
+   720→   720→              <Bookmark className="h-4 w-4" /> Tambah ke daftar
+   721→   721→            </DropdownMenuItem>
+   722→   722→            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={exportChat}>
+   723→   723→              <Download className="h-4 w-4" /> Ekspor obrolan
+   724→   724→            </DropdownMenuItem>
+   725→   725→            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={onBack}>
+   726→   726→              <MessageSquareX className="h-4 w-4" /> Tutup obrolan
+   727→   727→            </DropdownMenuItem>
+   728→   728→            <DropdownMenuSeparator />
+   729→   729→            <DropdownMenuItem
+   730→   730→              className="gap-2.5 cursor-pointer"
+   731→   731→              variant="destructive"
+   732→   732→              disabled={!isPrivate || !chat.contact}
+   733→   733→              onClick={() => {
+   734→   734→                setReportBlock(true);
+   735→   735→                setReportOpen(true);
+   736→   736→              }}
+   737→   737→            >
+   738→   738→              <MessageSquareWarning className="h-4 w-4" /> Laporkan
+   739→   739→            </DropdownMenuItem>
+   740→   740→            {chat.contact?.blocked ? (
+   741→   741→              <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={unblockContact}>
+   742→   742→                <CircleSlash className="h-4 w-4" /> Buka blokir
+   743→   743→              </DropdownMenuItem>
+   744→   744→            ) : (
+   745→   745→              <DropdownMenuItem
+   746→   746→                className="gap-2.5 cursor-pointer"
+   747→   747→                variant="destructive"
+   748→   748→                disabled={!isPrivate || !chat.contact}
+   749→   749→                onClick={() => setBlockOpen(true)}
+   750→   750→              >
+   751→   751→                <Ban className="h-4 w-4" /> Blokir
+   752→   752→              </DropdownMenuItem>
+   753→   753→            )}
+   754→   754→            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setClearOpen(true)}>
+   755→   755→              <Eraser className="h-4 w-4" /> Bersihkan obrolan
+   756→   756→            </DropdownMenuItem>
+   757→   757→            <DropdownMenuItem className="gap-2.5 cursor-pointer" variant="destructive" onClick={() => setDeleteOpen(true)}>
+   758→   758→              <Trash2 className="h-4 w-4" /> Hapus obrolan
+   759→   759→            </DropdownMenuItem>
+   760→   760→          </DropdownMenuContent>
+   761→   761→        </DropdownMenu>
+   762→   762→      </header>
+   763→   763→
+   764→   764→      {/* Bar pencarian dalam chat */}
+   765→   765→      {searchOpen && (
+   766→   766→        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background shrink-0">
+   767→   767→          <Search className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+   768→   768→          <Input
+   769→   769→            id="chat-search-input"
+   770→   770→            value={searchQuery}
+   771→   771→            onChange={(e) => setSearchQuery(e.target.value)}
+   772→   772→            placeholder="Cari pesan dalam obrolan ini…"
+   773→   773→            aria-label="Cari pesan dalam obrolan"
+   774→   774→            className="h-8 bg-secondary border-transparent"
+   775→   775→          />
+   776→   776→          {q && (
+   777→   777→            <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+   778→   778→              {visibleMessages.length} hasil
+   779→   779→            </span>
+   780→   780→          )}
+   781→   781→          <Button
+   782→   782→            variant="ghost"
+   783→   783→            size="icon"
+   784→   784→            className="h-8 w-8 shrink-0"
+   785→   785→            aria-label="Tutup pencarian"
+   786→   786→            onClick={() => {
+   787→   787→              setSearchOpen(false);
+   788→   788→              setSearchQuery("");
+   789→   789→            }}
+   790→   790→          >
+   791→   791→            <X className="h-4 w-4" />
+   792→   792→          </Button>
+   793→   793→        </div>
+   794→   794→      )}
+   795→   795→
+   796→   796→      {/* Bar pilih pesan */}
+   797→   797→      {selectMode && (
+   798→   798→        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background shrink-0" aria-live="polite">
+   799→   799→          <ListChecks className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+   800→   800→          <p className="text-sm font-medium flex-1">{selectedMsgIds.size} pesan dipilih</p>
+   801→   801→          <Button
+   802→   802→            variant="ghost"
+   803→   803→            size="icon"
+   804→   804→            aria-label="Hapus pesan terpilih"
+   805→   805→            disabled={selectedMsgIds.size === 0}
+   806→   806→            onClick={() => {
+   807→   807→              const ids = Array.from(selectedMsgIds);
+   808→   808→              ids.forEach((id) => deleteMessage(id));
+   809→   809→              exitSelect();
+   810→   810→              toast({ title: `${ids.length} pesan dihapus` });
+   811→   811→            }}
+   812→   812→            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   813→   813→          >
+   814→   814→            <Trash2 className="h-[18px] w-[18px]" />
+   815→   815→          </Button>
+   816→   816→          <Button variant="ghost" size="icon" aria-label="Batal pilih pesan" onClick={exitSelect}>
+   817→   817→            <X className="h-[18px] w-[18px] text-muted-foreground" />
+   818→   818→          </Button>
+   819→   819→        </div>
+   820→   820→      )}
+   821→   821→
+   822→   822→      {/* Area pesan */}
+   823→   823→      <div
+   824→   824→        ref={scrollRef}
+   825→   825→        onScroll={handleScroll}
+   826→   826→        className="flex-1 min-h-0 overflow-y-auto wa-scrollbar py-3 space-y-1"
+   827→   827→        style={themeCss ? { background: themeCss } : undefined}
+   828→   828→        role="log"
+   829→   829→        aria-label={`Percakapan dengan ${chat.name}`}
+   830→   830→        aria-live="polite"
+   831→   831→      >
+   832→   832→        {loading && (
+   833→   833→          <div className="space-y-3 px-4 py-2" aria-hidden="true">
+   834→   834→            <div className="flex justify-start">
+   835→   835→              <Skeleton className="h-10 w-48 rounded-lg bg-white/60" />
+   836→   836→            </div>
+   837→   837→            <div className="flex justify-end">
+   838→   838→              <Skeleton className="h-10 w-40 rounded-lg" />
+   839→   839→            </div>
+   840→   840→            <div className="flex justify-start">
+   841→   841→              <Skeleton className="h-14 w-56 rounded-lg bg-white/60" />
+   842→   842→            </div>
+   843→   843→            <div className="flex justify-end">
+   844→   844→              <Skeleton className="h-10 w-52 rounded-lg" />
+   845→   845→            </div>
+   846→   846→          </div>
+   847→   847→        )}
+   848→   848→
+   849→   849→        {!loading && visibleMessages.length === 0 && q && (
+   850→   850→          <div className="h-40 flex flex-col items-center justify-center px-6 text-center">
+   851→   851→            <Search className="h-8 w-8 text-muted-foreground/40 mb-2" aria-hidden="true" />
+   852→   852→            <p className="text-sm font-medium text-foreground/80">Tidak ada hasil untuk “{searchQuery}”</p>
+   853→   853→            <p className="text-xs text-muted-foreground mt-1">Coba kata kunci lain.</p>
+   854→   854→          </div>
+   855→   855→        )}
+   856→   856→
+   857→   857→        {!loading && messages.length === 0 && !q && (
+   858→   858→          <div className="h-full flex flex-col items-center justify-center px-6 text-center">
+   859→   859→            <span className="h-16 w-16 rounded-full bg-white dark:bg-secondary shadow flex items-center justify-center mb-4">
+   860→   860→              <span className="text-2xl" aria-hidden="true">👋</span>
+   861→   861→            </span>
+   862→   862→            <p className="text-sm font-medium text-foreground/80">Belum ada pesan di sini</p>
+   863→   863→            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+   864→   864→              Mulai percakapan dengan menyapa {chat.name} lewat kolom di bawah.
+   865→   865→            </p>
+   866→   866→          </div>
+   867→   867→        )}
+   868→   868→
+   869→   869→        {rendered}
+   870→   870→      </div>
+   871→   871→
+   872→   872→      {/* Composer */}
+   873→   873→      {!selectMode && (
+   874→   874→        <Composer
+   875→   875→          chatId={chat.id}
+   876→   876→          blocked={chat.type === "PRIVATE" ? chat.contact?.blocked : false}
+   877→   877→          onUnblock={unblockContact}
+   878→   878→          sendMessage={sendMessage}
+   879→   879→        />
+   880→   880→      )}
+   881→   881→
+   882→   882→      {/* Panggilan keluar WebRTC (mount-based agar state selalu segar) */}
+   883→   883→      {callKind !== null && (
+   884→   884→        <CallDialog
+   885→   885→          mode="outgoing"
+   886→   886→          contactId={chat.contact?.id ?? null}
+   887→   887→          contactName={chat.name}
+   888→   888→          colorKey={chat.colorKey}
+   889→   889→          avatarUrl={chat.avatarUrl}
+   890→   890→          kind={callKind}
+   891→   891→          onEnd={() => setCallKind(null)}
+   892→   892→        />
+   893→   893→      )}
+   894→   894→
+   895→   895→      {/* Info chat */}
+   896→   896→      <ChatInfoSheet
+   897→   897→        open={infoOpen}
+   898→   898→        onOpenChange={setInfoOpen}
+   899→   899→        chat={chat}
+   900→   900→        participants={participants}
+   901→   901→        mediaCount={mediaCount}
+   902→   902→        onContactUpdated={onChatUpdated}
+   903→   903→      />
+   904→   904→
+   905→   905→      {/* ---------- Dialog menu ---------- */}
+   906→   906→      <LabelsPickDialog
+   907→   907→        open={labelsOpen}
+   908→   908→        onOpenChange={setLabelsOpen}
+   909→   909→        contactId={chat.contact?.id ?? null}
+   910→   910→        initialLabelIds={contactLabelIds}
+   911→   911→        onSaved={() => onChatUpdated()}
+   912→   912→      />
+   913→   913→      <DisappearingDialog
+   914→   914→        open={disappearingOpen}
+   915→   915→        onOpenChange={setDisappearingOpen}
+   916→   916→        chatId={chat.id}
+   917→   917→        current={chat.disappearing}
+   918→   918→        onSaved={() => onChatUpdated()}
+   919→   919→      />
+   920→   920→      <ChatThemeDialog open={themeOpen} onOpenChange={setThemeOpen} chatId={chat.id} onApplied={setThemeCss} />
+   921→   921→
+   922→   922→      <ConfirmDialog
+   923→   923→        open={contactEditOpen}
+   924→   924→        onOpenChange={setContactEditOpen}
+   925→   925→        title="Simpan ke kontak"
+   926→   926→        description={`Perbarui nama kontak untuk ${chat.contact?.phone ?? ""}.`}
+   927→   927→        confirmLabel="Simpan"
+   928→   928→        onConfirm={() => void saveContactName()}
+   929→   929→      >
+   930→   930→        <div className="py-1">
+   931→   931→          <Label htmlFor="contact-name-input" className="text-xs text-muted-foreground">
+   932→   932→            Nama kontak
+   933→   933→          </Label>
+   934→   934→          <Input
+   935→   935→            id="contact-name-input"
+   936→   936→            value={contactName}
+   937→   937→            onChange={(e) => setContactName(e.target.value)}
+   938→   938→            placeholder="Nama kontak"
+   939→   939→            className="mt-1"
+   940→   940→          />
+   941→   941→        </div>
+   942→   942→      </ConfirmDialog>
+   943→   943→
+   944→   944→      <ConfirmDialog
+   945→   945→        open={reportOpen}
+   946→   946→        onOpenChange={setReportOpen}
+   947→   947→        title={`Laporkan ke ${business.businessName}?`}
+   948→   948→        description="Pesan terakhir dari obrolan ini akan diteruskan untuk ditinjau."
+   949→   949→        confirmLabel="Laporkan"
+   950→   950→        destructive
+   951→   951→        onConfirm={() => void reportChat()}
+   952→   952→      >
+   953→   953→        <Label className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 cursor-pointer">
+   954→   954→          <Checkbox checked={reportBlock} onCheckedChange={(v) => setReportBlock(v === true)} />
+   955→   955→          <span className="text-sm">Blokir kontak</span>
+   956→   956→        </Label>
+   957→   957→      </ConfirmDialog>
+   958→   958→
+   959→   959→      <ConfirmDialog
+   960→   960→        open={blockOpen}
+   961→   961→        onOpenChange={setBlockOpen}
+   962→   962→        title={`Blokir ${chat.name}?`}
+   963→   963→        description="Kontak yang diblokir tidak bisa mengirim pesan atau menelepon Anda lagi."
+   964→   964→        confirmLabel="Blokir"
+   965→   965→        destructive
+   966→   966→        onConfirm={blockContact}
+   967→   967→      />
+   968→   968→
+   969→   969→      <ConfirmDialog
+   970→   970→        open={clearOpen}
+   971→   971→        onOpenChange={setClearOpen}
+   972→   972→        title="Bersihkan obrolan ini?"
+   973→   973→        description="Semua pesan akan dihapus dari obrolan ini, tetapi chat tetap ada."
+   974→   974→        confirmLabel="Bersihkan"
+   975→   975→        destructive
+   976→   976→        onConfirm={() => void clearMessages()}
+   977→   977→      />
+   978→   978→
+   979→   979→      <ConfirmDialog
+   980→   980→        open={deleteOpen}
+   981→   981→        onOpenChange={setDeleteOpen}
+   982→   982→        title="Hapus obrolan ini?"
+   983→   983→        description="Obrolan beserta seluruh pesan akan dihapus permanen. Tindakan ini tidak bisa dibatalkan."
+   984→   984→        confirmLabel="Hapus"
+   985→   985→        destructive
+   986→   986→        onConfirm={() => void deleteChat()}
+   987→   987→      />
+   988→   988→    </div>
+   989→   989→  );
+   990→   990→}
+   991→   991→

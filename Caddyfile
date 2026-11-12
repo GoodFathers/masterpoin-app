@@ -1,0 +1,49 @@
+:81 {
+        @transform_port_query {
+                query XTransformPort=*
+        }
+
+        handle @transform_port_query {
+                reverse_proxy localhost:{query.XTransformPort} {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+
+        handle {
+                reverse_proxy localhost:3000 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+}
+
+# ============================================================
+# Domain resmi IndiGoo — Task 73: https://indonesiandigitalgoo.com
+# Aktif bila Caddy dijalankan pada server publik/VPS dengan DNS
+# indonesiandigitalgoo.com (A/CNAME) mengarah ke server tersebut.
+# Sertifikat HTTPS Let's Encrypt diterbitkan otomatis oleh Caddy.
+# ============================================================
+www.indonesiandigitalgoo.com {
+        redir https://indonesiandigitalgoo.com{uri} permanent
+}
+
+indonesiandigitalgoo.com {
+        @socket_chat path /socket.io/*
+        handle @socket_chat {
+                reverse_proxy localhost:3004
+        }
+
+        handle {
+                reverse_proxy localhost:3000 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+}

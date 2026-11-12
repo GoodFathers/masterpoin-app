@@ -1,0 +1,291 @@
+     1→/home/z/my-project/src/app/api/location/route.ts:13:    const users = await db.user.findMany({
+     2→/home/z/my-project/src/app/api/location/route.ts:48:    const updated = await db.user.update({
+     3→/home/z/my-project/src/app/api/timer/activate/route.ts:36:      ? await db.user.update({
+     4→/home/z/my-project/src/app/api/stories/route.ts:8:  const stories = await db.story.findMany({
+     5→/home/z/my-project/src/app/api/stories/route.ts:17:  const contacts = await db.contact.findMany({
+     6→/home/z/my-project/src/app/api/stories/route.ts:52:  const story = await db.story.create({
+     7→/home/z/my-project/src/app/api/stories/[id]/view/route.ts:8:  const story = await db.story.findUnique({ where: { id } });
+     8→/home/z/my-project/src/app/api/stories/[id]/view/route.ts:11:  const updated = await db.story.update({
+     9→/home/z/my-project/src/app/api/contacts/route.ts:7:    const contacts = await db.contact.findMany({ orderBy: { name: "asc" } });
+    10→/home/z/my-project/src/app/api/contacts/[id]/route.ts:13:    const existing = await db.contact.findUnique({ where: { id } });
+    11→/home/z/my-project/src/app/api/contacts/[id]/route.ts:22:      const valid = await db.label.findMany({ where: { id: { in: body.labelIds.filter(Boolean) } }, select: { id: true } });
+    12→/home/z/my-project/src/app/api/contacts/[id]/route.ts:28:    const contact = await db.contact.update({ where: { id }, data });
+    13→/home/z/my-project/src/app/api/messages/route.ts:13:    const messages = await db.message.findMany({
+    14→/home/z/my-project/src/app/api/messages/route.ts:24:    const chats = await db.chat.findMany({
+    15→/home/z/my-project/src/app/api/messages/[id]/route.ts:14:    const existing = await db.message.findUnique({ where: { id } });
+    16→/home/z/my-project/src/app/api/messages/[id]/route.ts:21:    const message = await db.message.update({ where: { id }, data });
+    17→/home/z/my-project/src/app/api/messages/[id]/route.ts:33:    const existing = await db.message.findUnique({ where: { id } });
+    18→/home/z/my-project/src/app/api/messages/[id]/route.ts:35:    await db.message.delete({ where: { id } });
+    19→/home/z/my-project/src/app/api/users/route.ts:17:    const users = await db.user.findMany({ orderBy: { createdAt: "asc" } });
+    20→/home/z/my-project/src/app/api/users/route.ts:27:  const users = await db.user.findMany({ select: { accessId: true } });
+    21→/home/z/my-project/src/app/api/users/route.ts:57:    const exists = await db.user.findUnique({ where: { username } });
+    22→/home/z/my-project/src/app/api/users/route.ts:68:    const created = await db.user.create({ data });
+    23→/home/z/my-project/src/app/api/users/[id]/route.ts:12:  return db.user.count({
+    24→/home/z/my-project/src/app/api/users/[id]/route.ts:31:    const target = await db.user.findUnique({ where: { id } });
+    25→/home/z/my-project/src/app/api/users/[id]/route.ts:79:    const updated = await db.user.update({ where: { id }, data });
+    26→/home/z/my-project/src/app/api/users/[id]/route.ts:94:    const target = await db.user.findUnique({ where: { id } });
+    27→/home/z/my-project/src/app/api/users/[id]/route.ts:102:    await db.user.delete({ where: { id } }); // video miliknya tetap ada (author → null)
+    28→/home/z/my-project/src/app/api/account/route.ts:12:  let profile = await db.profile.findUnique({ where: { id: "main" } });
+    29→/home/z/my-project/src/app/api/account/route.ts:13:  if (!profile) profile = await db.profile.create({ data: { id: "main" } });
+    30→/home/z/my-project/src/app/api/account/route.ts:16:    db.message.count(),
+    31→/home/z/my-project/src/app/api/account/route.ts:17:    db.message.aggregate({
+    32→/home/z/my-project/src/app/api/account/route.ts:22:    db.chatBackup.findMany({ orderBy: { createdAt: "desc" } }),
+    33→/home/z/my-project/src/app/api/account/route.ts:48:  const profile = await db.profile.update({
+    34→/home/z/my-project/src/app/api/account/backup/route.ts:27:      const backup = await db.chatBackup.create({
+    35→/home/z/my-project/src/app/api/account/backup/[id]/download/route.ts:17:    const backup = await db.chatBackup.findUnique({ where: { id } });
+    36→/home/z/my-project/src/app/api/account/backup/[id]/file/route.ts:13:    const backup = await db.chatBackup.findUnique({ where: { id } });
+    37→/home/z/my-project/src/app/api/account/_backup.ts:62:  let profile = await db.profile.findUnique({ where: { id: "main" } });
+    38→/home/z/my-project/src/app/api/account/_backup.ts:63:  if (!profile) profile = await db.profile.create({ data: { id: "main" } });
+    39→/home/z/my-project/src/app/api/account/_backup.ts:67:      db.label.findMany({ orderBy: { sortOrder: "asc" } }),
+    40→/home/z/my-project/src/app/api/account/_backup.ts:68:      db.contact.findMany({ orderBy: { createdAt: "asc" } }),
+    41→/home/z/my-project/src/app/api/account/_backup.ts:69:      db.chat.findMany({ orderBy: { createdAt: "asc" } }),
+    42→/home/z/my-project/src/app/api/account/_backup.ts:70:      db.message.findMany({ orderBy: { createdAt: "asc" } }),
+    43→/home/z/my-project/src/app/api/account/_backup.ts:71:      db.product.findMany({ orderBy: { createdAt: "asc" } }),
+    44→/home/z/my-project/src/app/api/account/_backup.ts:72:      db.collection.findMany({ orderBy: { name: "asc" } }),
+    45→/home/z/my-project/src/app/api/account/_backup.ts:73:      db.story.findMany({ orderBy: { createdAt: "asc" } }),
+    46→/home/z/my-project/src/app/api/account/_backup.ts:74:      db.broadcast.findMany({ orderBy: { createdAt: "asc" } }),
+    47→/home/z/my-project/src/app/api/account/_backup.ts:75:      db.quickReply.findMany({ orderBy: { sortOrder: "asc" } }),
+    48→/home/z/my-project/src/app/api/account/_backup.ts:76:      db.channel.findMany({ orderBy: { createdAt: "asc" } }),
+    49→/home/z/my-project/src/app/api/account/_backup.ts:77:      db.channelPost.findMany({ orderBy: { createdAt: "asc" } }),
+    50→/home/z/my-project/src/app/api/account/_backup.ts:78:      db.community.findMany({ orderBy: { createdAt: "asc" } }),
+    51→/home/z/my-project/src/app/api/account/_backup.ts:79:      db.callLog.findMany({ orderBy: { createdAt: "asc" } }),
+    52→/home/z/my-project/src/app/api/account/change-number/route.ts:37:    const profile = await db.profile.update({
+    53→/home/z/my-project/src/app/api/account/restore/route.ts:20:    const backup = await db.chatBackup.findUnique({ where: { id } });
+    54→/home/z/my-project/src/app/api/blocked/route.ts:6:  const contacts = await db.contact.findMany({
+    55→/home/z/my-project/src/app/api/blocked/[contactId]/route.ts:13:  const existing = await db.contact.findUnique({ where: { id: contactId } });
+    56→/home/z/my-project/src/app/api/blocked/[contactId]/route.ts:16:  const contact = await db.contact.update({
+    57→/home/z/my-project/src/app/api/verification/route.ts:11:    const profile = await db.profile.findUnique({ where: { id: "main" } });
+    58→/home/z/my-project/src/app/api/verification/route.ts:14:    const history = await db.verificationLog.findMany({
+    59→/home/z/my-project/src/app/api/verification/route.ts:37:    const profile = await db.profile.findUnique({ where: { id: "main" }, select: { id: true } });
+    60→/home/z/my-project/src/app/api/verification/route.ts:40:    await db.profile.update({ where: { id: "main" }, data: { brandProtected } });
+    61→/home/z/my-project/src/app/api/verification/check/route.ts:9:    const profile = await db.profile.findUnique({ where: { id: "main" }, select: { id: true, verificationStatus: true, verified: true } });
+    62→/home/z/my-project/src/app/api/verification/check/route.ts:13:      await db.profile.update({
+    63→/home/z/my-project/src/app/api/verification/apply/route.ts:9:    const profile = await db.profile.findUnique({ where: { id: "main" }, select: { id: true, verificationStatus: true } });
+    64→/home/z/my-project/src/app/api/verification/apply/route.ts:14:    await db.profile.update({ where: { id: "main" }, data: { verificationStatus: "PENDING" } });
+    65→/home/z/my-project/src/app/api/verification/submit/route.ts:14:    const profile = await db.profile.findUnique({ where: { id: "main" } });
+    66→/home/z/my-project/src/app/api/verification/submit/route.ts:31:        db.profile.update({
+    67→/home/z/my-project/src/app/api/verification/submit/route.ts:35:        db.verificationLog.create({
+    68→/home/z/my-project/src/app/api/verification/submit/route.ts:47:      db.profile.update({
+    69→/home/z/my-project/src/app/api/verification/submit/route.ts:51:      db.verificationLog.create({
+    70→/home/z/my-project/src/app/api/routines/route.ts:65:    db.routineCheck.findMany({ where: { userId: user.id, day }, select: { key: true } }),
+    71→/home/z/my-project/src/app/api/routines/route.ts:66:    db.message.count({
+    72→/home/z/my-project/src/app/api/routines/route.ts:69:    db.profile.findUnique({
+    73→/home/z/my-project/src/app/api/routines/route.ts:73:    db.dailyCheckIn.findMany({ where: { userId: user.id }, select: { day: true } }),
+    74→/home/z/my-project/src/app/api/routines/route.ts:74:    db.activityCheck.findMany({ where: { userId: user.id, day }, select: { key: true } }),
+    75→/home/z/my-project/src/app/api/routines/route.ts:76:    db.dailyCheckIn.findFirst({
+    76→/home/z/my-project/src/app/api/routines/religion/route.ts:30:  await db.user.update({ where: { id: user.id }, data: { religion } });
+    77→/home/z/my-project/src/app/api/routines/checkin/route.ts:47:  const last = await db.dailyCheckIn.findFirst({
+    78→/home/z/my-project/src/app/api/routines/checkin/route.ts:62:    await db.dailyCheckIn.create({ data: { userId: user.id, day } });
+    79→/home/z/my-project/src/app/api/routines/checkin/route.ts:71:  const rows = await db.dailyCheckIn.findMany({ where: { userId: user.id }, select: { day: true } });
+    80→/home/z/my-project/src/app/api/routines/checkin/route.ts:79:  const updated = await db.user.update({
+    81→/home/z/my-project/src/app/api/routines/claim/route.ts:50:    const chatCount = await db.message.count({
+    82→/home/z/my-project/src/app/api/routines/claim/route.ts:59:    const profile = await db.profile.findUnique({
+    83→/home/z/my-project/src/app/api/posts/[id]/route.ts:14:    const post = await db.channelPost.findUnique({ where: { id } });
+    84→/home/z/my-project/src/app/api/posts/[id]/route.ts:17:    const updated = await db.channelPost.update({
+    85→/home/z/my-project/src/app/api/posts/[id]/route.ts:35:    const post = await db.channelPost.findUnique({ where: { id }, select: { id: true } });
+    86→/home/z/my-project/src/app/api/posts/[id]/route.ts:37:    await db.channelPost.delete({ where: { id } });
+    87→/home/z/my-project/src/app/api/posts/[id]/like/route.ts:11:    const post = await db.channelPost.findUnique({ where: { id } });
+    88→/home/z/my-project/src/app/api/posts/[id]/like/route.ts:14:    const updated = await db.channelPost.update({
+    89→/home/z/my-project/src/app/api/communities/route.ts:15:    const communities = await db.community.findMany({ orderBy: { createdAt: "asc" } });
+    90→/home/z/my-project/src/app/api/communities/route.ts:33:    const dup = await db.community.findFirst({ where: { name }, select: { id: true } });
+    91→/home/z/my-project/src/app/api/communities/route.ts:36:    const community = await db.community.create({
+    92→/home/z/my-project/src/app/api/communities/[id]/groups/route.ts:25:    const community = await db.community.findUnique({ where: { id } });
+    93→/home/z/my-project/src/app/api/communities/[id]/groups/route.ts:46:    const updated = await db.community.update({
+    94→/home/z/my-project/src/app/api/communities/[id]/route.ts:14:    const community = await db.community.findUnique({ where: { id }, select: { id: true } });
+    95→/home/z/my-project/src/app/api/communities/[id]/route.ts:17:    const updated = await db.community.update({
+    96→/home/z/my-project/src/app/api/communities/[id]/announce/route.ts:29:    const community = await db.community.findUnique({ where: { id } });
+    97→/home/z/my-project/src/app/api/communities/[id]/announce/route.ts:44:    let chat = group.chatId ? await db.chat.findUnique({ where: { id: group.chatId } }) : null;
+    98→/home/z/my-project/src/app/api/communities/[id]/announce/route.ts:46:      chat = await db.chat.create({
+    99→/home/z/my-project/src/app/api/communities/[id]/announce/route.ts:56:      await db.community.update({ where: { id }, data: { groups: JSON.stringify(groups) } });
+   100→/home/z/my-project/src/app/api/communities/[id]/announce/route.ts:60:    const msg = await db.message.create({
+   101→/home/z/my-project/src/app/api/communities/[id]/announce/route.ts:63:    await db.chat.update({ where: { id: chat.id }, data: { lastMessageAt: new Date() } });
+   102→/home/z/my-project/src/app/api/stats/route.ts:7:    db.dailyStat.findMany({ orderBy: { date: "asc" } }),
+   103→/home/z/my-project/src/app/api/stats/route.ts:8:    db.message.groupBy({ by: ["type"], _count: { type: true } }),
+   104→/home/z/my-project/src/app/api/stats/route.ts:9:    db.message.groupBy({
+   105→/home/z/my-project/src/app/api/stats/route.ts:15:    db.chat.findMany({
+   106→/home/z/my-project/src/app/api/admin/overview/route.ts:41:      db.user.findMany({
+   107→/home/z/my-project/src/app/api/admin/overview/route.ts:57:      db.message.count({ where: { type: { not: "SYSTEM" } } }),
+   108→/home/z/my-project/src/app/api/admin/overview/route.ts:58:      db.chat.count({ where: { type: "PRIVATE" } }),
+   109→/home/z/my-project/src/app/api/admin/overview/route.ts:59:      db.chat.count({ where: { type: "GROUP" } }),
+   110→/home/z/my-project/src/app/api/admin/overview/route.ts:60:      db.callLog.count(),
+   111→/home/z/my-project/src/app/api/admin/overview/route.ts:61:      db.story.count(),
+   112→/home/z/my-project/src/app/api/admin/overview/route.ts:62:      db.product.count(),
+   113→/home/z/my-project/src/app/api/admin/overview/route.ts:63:      db.channel.count(),
+   114→/home/z/my-project/src/app/api/admin/overview/route.ts:64:      db.broadcast.count(),
+   115→/home/z/my-project/src/app/api/admin/overview/route.ts:65:      db.contact.count(),
+   116→/home/z/my-project/src/app/api/admin/overview/route.ts:66:      db.label.count(),
+   117→/home/z/my-project/src/app/api/admin/overview/route.ts:67:      db.dailyCheckIn.count({ where: { day } }),
+   118→/home/z/my-project/src/app/api/admin/overview/route.ts:68:      db.activityCheck.count({ where: { day, key: { not: { startsWith: "mission:" } } } }),
+   119→/home/z/my-project/src/app/api/admin/overview/route.ts:69:      db.routineCheck.count({ where: { day } }),
+   120→/home/z/my-project/src/app/api/admin/overview/route.ts:70:      db.activityLog.count({ where: { day } }),
+   121→/home/z/my-project/src/app/api/admin/overview/route.ts:71:      db.user.findMany({
+   122→/home/z/my-project/src/app/api/admin/config/route.ts:34:      db.systemConfig.upsert({
+   123→/home/z/my-project/src/app/api/admin/config/route.ts:39:      db.systemConfig.upsert({
+   124→/home/z/my-project/src/app/api/admin/config/route.ts:63:    await db.systemConfig.deleteMany({});
+   125→/home/z/my-project/src/app/api/admin/users/route.ts:63:    const users = await db.user.findMany({
+   126→/home/z/my-project/src/app/api/admin/users/route.ts:110:    const target = await db.user.findUnique({ where: { id } });
+   127→/home/z/my-project/src/app/api/admin/users/route.ts:171:    const updated = await db.user.update({ where: { id }, data, select: SELECT_SAFE });
+   128→/home/z/my-project/src/app/api/videos/route.ts:18:    const videos = await db.videoPost.findMany({
+   129→/home/z/my-project/src/app/api/videos/route.ts:56:    const post = await db.videoPost.create({
+   130→/home/z/my-project/src/app/api/videos/[id]/route.ts:19:    const video = await db.videoPost.findUnique({ where: { id } });
+   131→/home/z/my-project/src/app/api/videos/[id]/route.ts:41:    const updated = await db.videoPost.update({ where: { id }, data });
+   132→/home/z/my-project/src/app/api/videos/[id]/route.ts:59:    const video = await db.videoPost.findUnique({ where: { id } });
+   133→/home/z/my-project/src/app/api/videos/[id]/route.ts:65:    await db.videoPost.delete({ where: { id } });
+   134→/home/z/my-project/src/app/api/videos/[id]/like/route.ts:12:    const existing = await db.videoPost.findUnique({ where: { id } });
+   135→/home/z/my-project/src/app/api/videos/[id]/like/route.ts:16:    const updated = await db.videoPost.update({ where: { id }, data: { likes } });
+   136→/home/z/my-project/src/app/api/chats/route.ts:15:    const chats = await db.chat.findMany({
+   137→/home/z/my-project/src/app/api/chats/route.ts:36:      const rows = await db.message.findMany({ where: { body: { contains: q } }, select: { chatId: true, body: true } });
+   138→/home/z/my-project/src/app/api/chats/route.ts:80:      const chat = await db.chat.create({
+   139→/home/z/my-project/src/app/api/chats/route.ts:89:      await db.message.create({
+   140→/home/z/my-project/src/app/api/chats/route.ts:100:    const contact = await db.contact.findUnique({ where: { id: contactId } });
+   141→/home/z/my-project/src/app/api/chats/route.ts:103:    const existing = await db.chat.findFirst({
+   142→/home/z/my-project/src/app/api/chats/route.ts:109:    const profile = await db.profile.findUnique({ where: { id: "main" } });
+   143→/home/z/my-project/src/app/api/chats/route.ts:110:    const chat = await db.chat.create({
+   144→/home/z/my-project/src/app/api/chats/route.ts:118:      await db.message.create({
+   145→/home/z/my-project/src/app/api/chats/_map.ts:123:  return db.chat.findUnique({
+   146→/home/z/my-project/src/app/api/chats/_map.ts:208:  const contacts = await db.contact.findMany({
+   147→/home/z/my-project/src/app/api/chats/[id]/route.ts:24:    const existing = await db.chat.findUnique({ where: { id } });
+   148→/home/z/my-project/src/app/api/chats/[id]/route.ts:43:    await db.chat.update({ where: { id }, data });
+   149→/home/z/my-project/src/app/api/chats/[id]/route.ts:58:    const existing = await db.chat.findUnique({ where: { id } });
+   150→/home/z/my-project/src/app/api/chats/[id]/route.ts:60:    await db.chat.delete({ where: { id } }); // messages cascade
+   151→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:23:    const chat = await db.chat.findUnique({
+   152→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:38:      messages = await db.message.findMany({
+   153→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:45:      messages = await db.message.findMany({
+   154→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:59:      const rows = await db.message.findMany({
+   155→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:113:    const chat = await db.chat.findUnique({ where: { id } });
+   156→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:143:    const msg = await db.message.create({
+   157→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:163:    await db.chat.update({ where: { id }, data: { lastMessageAt: new Date() } });
+   158→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:191:    const chat = await db.chat.findUnique({ where: { id } });
+   159→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:194:    const deleted = await db.message.deleteMany({ where: { chatId: id } });
+   160→/home/z/my-project/src/app/api/chats/[id]/messages/route.ts:195:    await db.chat.update({ where: { id }, data: { lastMessageAt: new Date() } });
+   161→/home/z/my-project/src/app/api/labels/route.ts:18:      db.label.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+   162→/home/z/my-project/src/app/api/labels/route.ts:19:      db.contact.findMany({ orderBy: { name: "asc" } }),
+   163→/home/z/my-project/src/app/api/labels/route.ts:48:    const dup = await db.label.findFirst({ where: { name } });
+   164→/home/z/my-project/src/app/api/labels/route.ts:51:    const max = await db.label.aggregate({ _max: { sortOrder: true } });
+   165→/home/z/my-project/src/app/api/labels/route.ts:52:    const label = await db.label.create({ data: { name, colorKey, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
+   166→/home/z/my-project/src/app/api/labels/[id]/route.ts:22:    const existing = await db.label.findUnique({ where: { id } });
+   167→/home/z/my-project/src/app/api/labels/[id]/route.ts:29:      const dup = await db.label.findFirst({ where: { name, id: { not: id } } });
+   168→/home/z/my-project/src/app/api/labels/[id]/route.ts:41:    const label = await db.label.update({ where: { id }, data });
+   169→/home/z/my-project/src/app/api/labels/[id]/route.ts:52:    const existing = await db.label.findUnique({ where: { id } });
+   170→/home/z/my-project/src/app/api/labels/[id]/route.ts:56:    const affected = await db.contact.findMany({ where: { labelIds: { contains: id } } });
+   171→/home/z/my-project/src/app/api/labels/[id]/route.ts:61:        await db.contact.update({ where: { id: c.id }, data: { labelIds: JSON.stringify(next) } });
+   172→/home/z/my-project/src/app/api/labels/[id]/route.ts:65:    await db.label.delete({ where: { id } });
+   173→/home/z/my-project/src/app/api/privacy/route.ts:27:  const profile = await db.profile.findUnique({ where: { id: "main" } });
+   174→/home/z/my-project/src/app/api/privacy/route.ts:58:  const profile = await db.profile.update({ where: { id: "main" }, data });
+   175→/home/z/my-project/src/app/api/simulate/progress/route.ts:13:    const res = await db.message.updateMany({
+   176→/home/z/my-project/src/app/api/simulate/reply/route.ts:23:    const chat = await db.chat.findUnique({ where: { id: chatId }, include: { contact: true } });
+   177→/home/z/my-project/src/app/api/simulate/reply/route.ts:27:    const readNow = await db.message.updateMany({
+   178→/home/z/my-project/src/app/api/simulate/reply/route.ts:35:    const profile = await db.profile.findUnique({ where: { id: "main" } });
+   179→/home/z/my-project/src/app/api/simulate/reply/route.ts:50:      senderId !== "system" ? await db.contact.findUnique({ where: { id: senderId } }) : null;
+   180→/home/z/my-project/src/app/api/simulate/reply/route.ts:62:        const recent = await db.message.findMany({
+   181→/home/z/my-project/src/app/api/simulate/reply/route.ts:70:          ? await db.contact.findMany({ where: { id: { in: nameMapIds } }, select: { id: true, name: true } })
+   182→/home/z/my-project/src/app/api/simulate/reply/route.ts:103:    const msg = await db.message.create({
+   183→/home/z/my-project/src/app/api/simulate/reply/route.ts:114:    await db.chat.update({
+   184→/home/z/my-project/src/app/api/devices/route.ts:18:    await db.device.upsert({
+   185→/home/z/my-project/src/app/api/devices/route.ts:31:    await db.device.updateMany({ where: { id: { not: deviceId }, current: true }, data: { current: false } });
+   186→/home/z/my-project/src/app/api/devices/route.ts:34:  const devices = await db.device.findMany({
+   187→/home/z/my-project/src/app/api/devices/route.ts:50:  const device = await db.device.create({
+   188→/home/z/my-project/src/app/api/devices/[id]/route.ts:12:  const device = await db.device.findUnique({ where: { id } });
+   189→/home/z/my-project/src/app/api/devices/[id]/route.ts:18:  await db.device.delete({ where: { id } });
+   190→/home/z/my-project/src/app/api/contacts/[id]/labels/route.ts:18:      const found = await db.label.findMany({ where: { id: { in: ids } } });
+   191→/home/z/my-project/src/app/api/contacts/[id]/labels/route.ts:22:    const existing = await db.contact.findUnique({ where: { id } });
+   192→/home/z/my-project/src/app/api/contacts/[id]/labels/route.ts:25:    const contact = await db.contact.update({ where: { id }, data: { labelIds: JSON.stringify(ids) } });
+   193→/home/z/my-project/src/app/api/contacts/[id]/labels/route.ts:27:    const labels = ids.length > 0 ? await db.label.findMany({ where: { id: { in: ids } } }) : [];
+   194→/home/z/my-project/src/app/api/auth/next-id/route.ts:8:  const users = await db.user.findMany({ select: { accessId: true } });
+   195→/home/z/my-project/src/app/api/auth/register/route.ts:50:    const exists = await db.user.findUnique({ where: { username } });
+   196→/home/z/my-project/src/app/api/auth/register/route.ts:54:    const created = await db.user.create({
+   197→/home/z/my-project/src/app/api/auth/login/route.ts:44:    const user = await db.user.findFirst({
+   198→/home/z/my-project/src/app/api/collections/route.ts:7:    const collections = await db.collection.findMany({
+   199→/home/z/my-project/src/app/api/collections/route.ts:25:    const exists = await db.collection.findFirst({ where: { name } });
+   200→/home/z/my-project/src/app/api/collections/route.ts:28:    const collection = await db.collection.create({
+   201→/home/z/my-project/src/app/api/collections/[id]/route.ts:13:    const existing = await db.collection.findUnique({ where: { id } });
+   202→/home/z/my-project/src/app/api/collections/[id]/route.ts:16:    const dup = await db.collection.findFirst({ where: { name, id: { not: id } } });
+   203→/home/z/my-project/src/app/api/collections/[id]/route.ts:19:    const collection = await db.collection.update({
+   204→/home/z/my-project/src/app/api/collections/[id]/route.ts:34:    const existing = await db.collection.findUnique({ where: { id } });
+   205→/home/z/my-project/src/app/api/collections/[id]/route.ts:38:    await db.product.updateMany({ where: { collectionId: id }, data: { collectionId: null } });
+   206→/home/z/my-project/src/app/api/collections/[id]/route.ts:39:    await db.collection.delete({ where: { id } });
+   207→/home/z/my-project/src/app/api/calls/route.ts:8:    const calls = await db.callLog.findMany({ orderBy: { createdAt: "desc" } });
+   208→/home/z/my-project/src/app/api/calls/route.ts:19:    const res = await db.callLog.deleteMany({});
+   209→/home/z/my-project/src/app/api/calls/route.ts:37:    const contact = body.contactId ? await db.contact.findUnique({ where: { id: body.contactId } }) : null;
+   210→/home/z/my-project/src/app/api/calls/route.ts:42:    const call = await db.callLog.create({
+   211→/home/z/my-project/src/app/api/calls/[id]/route.ts:11:    const existing = await db.callLog.findUnique({ where: { id } });
+   212→/home/z/my-project/src/app/api/calls/[id]/route.ts:13:    await db.callLog.delete({ where: { id } });
+   213→/home/z/my-project/src/app/api/products/route.ts:10:    const exists = await db.product.findUnique({ where: { sku: candidate } });
+   214→/home/z/my-project/src/app/api/products/route.ts:19:  const found = await db.collection.findUnique({ where: { id: collectionId } });
+   215→/home/z/my-project/src/app/api/products/route.ts:26:      db.product.findMany({
+   216→/home/z/my-project/src/app/api/products/route.ts:30:      db.collection.findMany({
+   217→/home/z/my-project/src/app/api/products/route.ts:58:    const skuExists = await db.product.findUnique({ where: { sku } });
+   218→/home/z/my-project/src/app/api/products/route.ts:61:    const product = await db.product.create({
+   219→/home/z/my-project/src/app/api/products/[id]/route.ts:9:    const exists = await db.product.findUnique({ where: { sku: candidate } });
+   220→/home/z/my-project/src/app/api/products/[id]/route.ts:22:    const existing = await db.product.findUnique({ where: { id } });
+   221→/home/z/my-project/src/app/api/products/[id]/route.ts:46:        const col = await db.collection.findUnique({ where: { id: b.collectionId } });
+   222→/home/z/my-project/src/app/api/products/[id]/route.ts:55:        const dup = await db.product.findUnique({ where: { sku } });
+   223→/home/z/my-project/src/app/api/products/[id]/route.ts:63:    const product = await db.product.update({
+   224→/home/z/my-project/src/app/api/products/[id]/route.ts:78:    const existing = await db.product.findUnique({ where: { id } });
+   225→/home/z/my-project/src/app/api/products/[id]/route.ts:80:    await db.product.delete({ where: { id } });
+   226→/home/z/my-project/src/app/api/quick-replies/route.ts:7:    const quickReplies = await db.quickReply.findMany({ orderBy: { sortOrder: "asc" } });
+   227→/home/z/my-project/src/app/api/quick-replies/route.ts:27:    const dup = await db.quickReply.findUnique({ where: { shortcut } });
+   228→/home/z/my-project/src/app/api/quick-replies/route.ts:30:    const max = await db.quickReply.aggregate({ _max: { sortOrder: true } });
+   229→/home/z/my-project/src/app/api/quick-replies/route.ts:31:    const quickReply = await db.quickReply.create({
+   230→/home/z/my-project/src/app/api/quick-replies/[id]/route.ts:12:    const existing = await db.quickReply.findUnique({ where: { id } });
+   231→/home/z/my-project/src/app/api/quick-replies/[id]/route.ts:22:        const dup = await db.quickReply.findUnique({ where: { shortcut } });
+   232→/home/z/my-project/src/app/api/quick-replies/[id]/route.ts:34:    const quickReply = await db.quickReply.update({ where: { id }, data });
+   233→/home/z/my-project/src/app/api/quick-replies/[id]/route.ts:45:    const existing = await db.quickReply.findUnique({ where: { id } });
+   234→/home/z/my-project/src/app/api/quick-replies/[id]/route.ts:47:    await db.quickReply.delete({ where: { id } });
+   235→/home/z/my-project/src/app/api/tickets/route.ts:16:    const tickets = await db.supportTicket.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
+   236→/home/z/my-project/src/app/api/tickets/route.ts:38:      const exists = await db.supportTicket.findUnique({ where: { code }, select: { id: true } });
+   237→/home/z/my-project/src/app/api/tickets/route.ts:40:      ticket = await db.supportTicket.create({ data: { code, subject, message } });
+   238→/home/z/my-project/src/app/api/tickets/[id]/route.ts:20:    const existing = await db.supportTicket.findUnique({ where: { id }, select: { id: true } });
+   239→/home/z/my-project/src/app/api/tickets/[id]/route.ts:23:    const ticket = await db.supportTicket.update({ where: { id }, data: { status } });
+   240→/home/z/my-project/src/app/api/missions/route.ts:87:    db.message.count({ where: { sender: "me", type: { not: "SYSTEM" } } }),
+   241→/home/z/my-project/src/app/api/missions/route.ts:88:    db.profile.findUnique({
+   242→/home/z/my-project/src/app/api/missions/route.ts:92:    db.routineCheck.groupBy({
+   243→/home/z/my-project/src/app/api/missions/route.ts:100:    db.activityCheck.findMany({
+   244→/home/z/my-project/src/app/api/missions/claim/route.ts:56:      db.message.count({ where: { sender: "me", type: { not: "SYSTEM" } } }),
+   245→/home/z/my-project/src/app/api/missions/claim/route.ts:57:      db.profile.findUnique({
+   246→/home/z/my-project/src/app/api/missions/claim/route.ts:61:      db.routineCheck.groupBy({ by: ["day"], where: { userId: user.id }, _count: { key: true } }),
+   247→/home/z/my-project/src/app/api/missions/claim/route.ts:145:  const last = await db.activityCheck.findFirst({
+   248→/home/z/my-project/src/app/api/missions/claim/route.ts:163:    await db.activityCheck.create({ data: { userId: user.id, key: ckey, day: jakartaDay() } });
+   249→/home/z/my-project/src/app/api/missions/claim/route.ts:171:  const updated = await db.user.update({
+   250→/home/z/my-project/src/app/api/autoreplies/route.ts:8:  const found = await db.profile.findUnique({ where: { id: PROFILE_ID } });
+   251→/home/z/my-project/src/app/api/autoreplies/route.ts:10:  return db.profile.create({ data: { id: PROFILE_ID } });
+   252→/home/z/my-project/src/app/api/autoreplies/route.ts:45:    const profile = await db.profile.update({ where: { id: PROFILE_ID }, data });
+   253→/home/z/my-project/src/app/api/orders/route.ts:11:    const orders = await db.order.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
+   254→/home/z/my-project/src/app/api/orders/route.ts:43:    const products = await db.product.findMany({ where: { id: { in: [...merged.keys()] } } });
+   255→/home/z/my-project/src/app/api/orders/route.ts:62:      const exists = await db.order.findUnique({ where: { code: candidate }, select: { id: true } });
+   256→/home/z/my-project/src/app/api/orders/[id]/route.ts:32:    const order = await db.order.findUnique({ where: { id } });
+   257→/home/z/my-project/src/app/api/orders/[id]/route.ts:55:      updated = await db.order.update({ where: { id }, data: { status } });
+   258→/home/z/my-project/src/app/api/profile/route.ts:24:  const found = await db.profile.findUnique({ where: { id: PROFILE_ID } });
+   259→/home/z/my-project/src/app/api/profile/route.ts:26:  return db.profile.create({ data: { id: PROFILE_ID } });
+   260→/home/z/my-project/src/app/api/profile/route.ts:55:    const profile = await db.profile.upsert({
+   261→/home/z/my-project/src/app/api/broadcasts/route.ts:8:      db.broadcast.findMany({ orderBy: { createdAt: "desc" } }),
+   262→/home/z/my-project/src/app/api/broadcasts/route.ts:9:      db.label.findMany(),
+   263→/home/z/my-project/src/app/api/broadcasts/route.ts:40:      const label = await db.label.findUnique({ where: { id: audienceLabel } });
+   264→/home/z/my-project/src/app/api/broadcasts/route.ts:44:    const broadcast = await db.broadcast.create({
+   265→/home/z/my-project/src/app/api/broadcasts/[id]/route.ts:8:    const existing = await db.broadcast.findUnique({ where: { id } });
+   266→/home/z/my-project/src/app/api/broadcasts/[id]/route.ts:10:    await db.broadcast.delete({ where: { id } });
+   267→/home/z/my-project/src/app/api/broadcasts/[id]/send/route.ts:25:    const broadcast = await db.broadcast.findUnique({ where: { id } });
+   268→/home/z/my-project/src/app/api/broadcasts/[id]/send/route.ts:29:    let contacts = await db.contact.findMany({ where: { blocked: false }, select: { labelIds: true } });
+   269→/home/z/my-project/src/app/api/market/route.ts:22:    const items = await db.marketItem.findMany({ where, orderBy: { sold: "desc" }, take: 60 });
+   270→/home/z/my-project/src/app/api/market/route.ts:60:    const item = await db.marketItem.create({
+   271→/home/z/my-project/src/app/api/market/inquiry/route.ts:12:    const item = await db.marketItem.findUnique({ where: { id: body.itemId } });
+   272→/home/z/my-project/src/app/api/market/inquiry/route.ts:16:    let contact = await db.contact.findFirst({ where: { phone: item.sellerPhone } });
+   273→/home/z/my-project/src/app/api/market/inquiry/route.ts:18:      contact = await db.contact.create({
+   274→/home/z/my-project/src/app/api/market/inquiry/route.ts:29:    let chat = await db.chat.findFirst({
+   275→/home/z/my-project/src/app/api/market/inquiry/route.ts:34:      chat = await db.chat.create({
+   276→/home/z/my-project/src/app/api/market/inquiry/route.ts:52:      db.message.create({
+   277→/home/z/my-project/src/app/api/market/inquiry/route.ts:55:      db.chat.update({ where: { id: chat.id }, data: { lastMessageAt: new Date() } }),
+   278→/home/z/my-project/src/app/api/market/[id]/route.ts:21:    const item = await db.marketItem.findUnique({ where: { id } });
+   279→/home/z/my-project/src/app/api/market/[id]/route.ts:61:    const updated = await db.marketItem.update({ where: { id }, data });
+   280→/home/z/my-project/src/app/api/market/[id]/route.ts:76:    const item = await db.marketItem.findUnique({ where: { id } });
+   281→/home/z/my-project/src/app/api/market/[id]/route.ts:79:    await db.marketItem.delete({ where: { id } });
+   282→/home/z/my-project/src/app/api/channels/route.ts:14:    const channels = await db.channel.findMany({
+   283→/home/z/my-project/src/app/api/channels/route.ts:45:    while (await db.channel.findUnique({ where: { handle } })) {
+   284→/home/z/my-project/src/app/api/channels/route.ts:50:    const channel = await db.channel.create({
+   285→/home/z/my-project/src/app/api/channels/[id]/route.ts:11:    const channel = await db.channel.findUnique({ where: { id } });
+   286→/home/z/my-project/src/app/api/channels/[id]/route.ts:14:    const updated = await db.channel.update({
+   287→/home/z/my-project/src/app/api/channels/[id]/route.ts:33:    const channel = await db.channel.findUnique({
+   288→/home/z/my-project/src/app/api/channels/[id]/follow/route.ts:11:    const channel = await db.channel.findUnique({ where: { id } });
+   289→/home/z/my-project/src/app/api/channels/[id]/follow/route.ts:14:    const updated = await db.channel.update({
+   290→/home/z/my-project/src/app/api/channels/[id]/posts/route.ts:22:    const channel = await db.channel.findUnique({ where: { id }, select: { id: true } });
+   291→/home/z/my-project/src/app/api/channels/[id]/posts/route.ts:25:    const post = await db.channelPost.create({

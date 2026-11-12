@@ -1,0 +1,402 @@
+     1→# Worklog — WA Bisnis Panel (Toko Berkah Jaya)
+     2→
+     3→Aplikasi clone WhatsApp Business untuk UMKM. Next.js 16 App Router + TypeScript + Tailwind 4 + shadcn/ui + Prisma SQLite.
+     4→SEMUA teks UI dalam **Bahasa Indonesia**. Tema warna: WhatsApp hijau (#00a884 primary, bubble keluar #d9fdd3 via class `.bubble-out`, bubble masuk putih via `.bubble-in`, latar chat via `.wa-chat-bg`, scrollbar `.wa-scrollbar`).
+     5→
+     6→---
+     7→
+     8→## Task ID: 1 (SELESAI — oleh orkestrator)
+     9→Agent: main
+    10→Task: Skema database + seed
+    11→
+    12→Work Log:
+    13→- `prisma/schema.prisma` berisi model: Profile (identitas bisnis + privasi + notifikasi + auto-reply), Label, Contact, Chat, Message, CallLog, Collection, Product, Story, Broadcast, QuickReply, Channel, ChannelPost, Community, Device, DailyStat, ChatBackup.
+    14→- `bun run db:push` sukses. Seed via `bun prisma/seed.ts` (jalan lagi aman, wipe dulu).
+    15→- Seed: 8 label (Pelanggan Baru, Prospek, Menunggu Pembayaran, Sudah Bayar, Pesanan Diproses, Pesanan Selesai, VIP, Reseller), 10 kontak, 8 chat (1 grup "Reseller Berkah Jaya", 1 chat arsip), pesan berbagai tipe, 6 produk + 3 koleksi (id produk pertama: `prod-kopi`), 6 story, 3 siaran (2 SENT 1 DRAFT), 5 quick reply (/harga /ongkir /bayar /katalog /thanks), 4 channel, 1 komunitas, 4 perangkat, 14 hari DailyStat, 6 riwayat panggilan, 3 backup.
+    16→
+    17→Stage Summary:
+    18→- DB siap pakai. JANGAN ubah schema; jika butuh field baru, gunakan field JSON-string yang sudah ada.
+    19→
+    20→## Task ID: 2 (SELESAI — oleh orkestrator)
+    21→Agent: main
+    22→Task: Shell, tema, util bersama
+    23→
+    24→Work Log:
+    25→- `src/components/AppShell.tsx`: sidebar desktop (grup menu Komunikasi/Toko/Bisnis/Lainnya) + top bar mobile + Sheet drawer. Render view komponen dari `src/components/views/`.
+    26→- `src/app/page.tsx` render AppShell. `src/app/layout.tsx` metadata baru.
+    27→- `src/app/globals.css`: tema WA (primary #00a884), utility `.wa-chat-bg`, `.bubble-out`, `.bubble-in`, `.wa-scrollbar`, `.wa-tick-read`, `.wa-rec-dot`, `.wa-pulse`, `.wa-story-ring`.
+    28→- `src/lib/wa-utils.ts`: `cn`, `colorOf(colorKey)` → {bg,text,soft,dot}, `getInitials`, `formatRupiah`, `formatTime`, `waDayLabel`, `waListTime`, `timeAgo`, `formatBytes`, `formatDuration`, `MESSAGE_TYPE_LABEL`, `messagePreview`.
+    29→- `src/lib/api-helpers.ts`: `ok(data)`, `bad(msg, status)`.
+    30→- `src/lib/cart-store.ts`: zustand cart (items/add/remove/setQty/clear, `cartTotal`).
+    31→- `src/lib/db.ts`: `import { db } from "@/lib/db"`.
+    32→- Gambar seed di `public/images/`: logo.png, product-kopi.png, product-keripik.png, product-batik.png, product-tas.png, product-madu.png, product-songket.png, story-promo.png.
+    33→
+    34→Stage Summary:
+    35→- View komponen yang HARUS dibuat agent (default export, self-contained, fetch data sendiri, responsif, full-height `h-full flex flex-col`):
+    36→  - 3-a: `ChatsView.tsx`
+    37→  - 3-b: `CatalogView.tsx`, `BusinessProfileView.tsx`, `LabelsView.tsx`, `BroadcastView.tsx`, `AutoRepliesView.tsx`
+    38→  - 3-c: `StatusView.tsx`, `StatsView.tsx`, `LinkView.tsx`, `DevicesView.tsx`, `SettingsView.tsx`
+    39→  - 3-d: `ChannelsView.tsx`, `CommunityView.tsx`, `PromotionsView.tsx`, `VerificationView.tsx`
+    40→
+    41→---
+    42→
+    43→## KONTRAK BERSAMA (WAJIB dibaca semua agent)
+    44→
+    45→### Aturan umum
+    46→- JANGAN mengedit: `prisma/schema.prisma`, `src/components/AppShell.tsx`, `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css`, `src/lib/*`, dan file milik agent lain. Hanya buat file di dalam batas milikmu.
+    47→- JANGAN jalankan `bun run dev`, `bun run build`, `bun run db:push`. JANGAN install package baru (sudah tersedia: recharts, qrcode, zustand, framer-motion, lucide-react, dll).
+    48→- **Next.js 16: `params` pada route handler adalah Promise.** Selalu: `export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) { const { id } = await params; ... }`.
+    49→- Route handler: baca body `await req.json()`. Balas pakai `ok(...)` / `bad(...)` dari `@/lib/api-helpers`. DB pakai `db` dari `@/lib/db`.
+    50→- Client fetch: `fetch(url, { cache: "no-store" })`.
+    51→- Avatar: lingkaran inisial — `cn("h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold", colorOf(c.colorKey).bg)` + `getInitials(c.name)`. Jika `avatarUrl` ada, render `<img>`.
+    52→- Toast: `import { useToast } from "@/hooks/use-toast"` (Toaster sudah terpasang di layout).
+    53→- Upload media client → baca file jadi data URL (batasi 2.5 MB, tolak dengan toast kalau lebih).
+    54→- Label/CRUD list: dialog shadcn. Konfirmasi hapus: AlertDialog. Loading: Skeleton atau spinner Loader2 animate-spin. List panjang: `max-h-96 overflow-y-auto wa-scrollbar`.
+    55→- Semua format tanggal/jam pakai helper wa-utils.
+    56→
+    57→### Tipe pesan (kolom `type` di Message)
+    58→`TEXT | IMAGE | VIDEO | AUDIO | DOC | LOCATION | CONTACT_CARD | PRODUCT | SYSTEM`
+    59→Kolom terkait: `body`, `mediaUrl` (data URL atau path), `mediaName`, `mediaMime`, `mediaSize`, `latitude`, `longitude`, `placeName`, `cardName`, `cardPhone`, `productId`, `status` (khusus pengirim "me": `PENDING | SENT | DELIVERED | READ | FAILED`).
+    60→Tick status keluar: PENDING=Clock, SENT=Check, DELIVERED=CheckCheck abu, READ=CheckCheck biru (class `wa-tick-read`), FAILED=CircleAlert merah.
+    61→
+    62→### colorKey yang valid
+    63→emerald, green, teal, purple, violet, amber, orange, pink, rose, red, cyan, lime.
+    64→
+    65→### API — milik 3-a (CHAT)
+    66→- `GET /api/chats?filter=all|unread|groups|archived&q=` → `{ chats: [...] }` tiap item: id, type (PRIVATE|GROUP), name, avatarUrl, colorKey, pinned, archived, muted, unread, isBusinessChat, lastMessageAt, contact{id,name,phone,colorKey,lastSeen,blocked,about,labelIds}|null, members (JSON string), groupDesc, lastMessage {type, body, sender, status, createdAt}|null. Urut pinned dulu lalu lastMessageAt desc. `q` mencari nama kontak/nama grup & isi pesan.
+    67→- `POST /api/chats` — PRIVATE: `{ type:"PRIVATE", contactId }` (pakai chat lama jika sudah ada, kembalikan yang ada; chat baru otomatis dapat pesan SYSTEM greeting jika profile.greetingEnabled). GROUP: `{ type:"GROUP", name, memberIds:[...], groupDesc? }`. → `{ chat }`.
+    68→- `PATCH /api/chats/[id]` `{ pinned?, archived?, muted?, unread? (angka), name?, groupDesc? }` → `{ chat }`.
+    69→- `DELETE /api/chats/[id]` → hapus chat+pesan → `{ success: true }`.
+    70→- `GET /api/chats/[id]/messages` → `{ chat, messages: [...] }` ascending createdAt.
+    71→- `POST /api/chats/[id]/messages` body semua kolom opsional kecuali minimal type/body → simpan sender "me" status "SENT", update chat.lastMessageAt → `{ message }`.
+    72→- `DELETE /api/messages/[id]` → `{ success: true }`.
+    73→- `POST /api/simulate/progress` `{ chatId }` → status pesan "me" yang SENT → DELIVERED → `{ updated }`.
+    74→- `POST /api/simulate/reply` `{ chatId }` → jika profile.awayEnabled && !storeOpen → simpan pesan dari kontak berisi awayText. Selain itu generate balasan via LLM (z-ai-web-dev-sdk, fallback daftar balasan statis jika error/timeout). SEKALIGUS: set pesan "me" berstatus SENT/DELIVERED di chat itu jadi READ. → `{ message }`.
+    75→- `GET /api/contacts` → `{ contacts }` (semua kolom).
+    76→- `PATCH /api/contacts/[id]` `{ blocked?, name?, about? }` → `{ contact }`.
+    77→- `GET /api/calls` → `{ calls }` desc createdAt.
+    78→- `POST /api/calls` `{ contactId, kind: VOICE|VIDEO, direction: IN|OUT|MISSSED?->(pakai OUT), durationSec }` → `{ call }`.
+    79→
+    80→Pola client kirim pesan (WAJIB di ChatsView): POST message → tampil → setTimeout 900ms panggil `/api/simulate/progress` → setTimeout 2.5–5 dtk panggil `/api/simulate/reply` → refetch/append pesan + refresh daftar chat.
+    81→
+    82→Balasan LLM (backend saja) pola:
+    83→```ts
+    84→import ZAI from "z-ai-web-dev-sdk";
+    85→const zai = await ZAI.create();
+    86→const completion = await zai.chat.completions.create({
+    87→  messages: [
+    88→    { role: "assistant", content: "Kamu adalah ${namaKontak}, pelanggan toko ${businessName}. Balas pesan pemilik toko dengan 1-2 kalimat santai berbahasa Indonesia, boleh emoji. Konteks: toko jualan kopi, keripik, madu, batik, songket, tas kulit." },
+    89→    { role: "user", content: ringkasan5PesanTerakhir },
+    90→  ],
+    91→  thinking: { type: "disabled" },
+    92→});
+    93→const text = completion.choices[0]?.message?.content?.trim();
+    94→```
+    95→Fallback jika gagal: pilih acak dari ["Baik kak, terima kasih info ya 🙏", "Oke siap kak!", "Boleh kirim katalog lengkapnya?", "Sip, nanti saya transfer ya 👍", "Alhamdulillah, barangnya sudah sampai 😊"].
+    96→
+    97→### API — milik 3-b (BISNIS)
+    98→- `GET /api/profile` → `{ profile }`. `PATCH /api/profile` (hanya field bisnis: businessName, ownerName, category, description, address, lat, lng, email, website, instagram, facebook, tiktok, hours (JSON string), logoUrl).
+    99→- `GET /api/products` → `{ products, collections }`. `POST /api/products` (sku auto `BJ-XXX-<rand>` jika kosong; available default true). `PATCH /api/products/[id]`. `DELETE /api/products/[id]`.
+   100→- `GET /api/collections` → `{ collections }` (dengan _count products). `POST /api/collections` `{ name }`. `DELETE /api/collections/[id]` (produk dilepas).
+   101→- `GET /api/labels` → `{ labels, contacts }` — contacts punya `labels: Label[]` hasil parse labelIds. `POST /api/labels` `{ name, colorKey }`. `PATCH /api/labels/[id]`. `DELETE /api/labels/[id]` (buang id dari labelIds semua kontak).
+   102→- `PATCH /api/contacts/[id]/labels` `{ labelIds: string[] }` → `{ contact }`.
+   103→- `GET /api/broadcasts` → `{ broadcasts }` desc. `POST /api/broadcasts` `{ name, message, mediaUrl?, audienceType: ALL|LABEL, audienceLabel? }` → DRAFT. `POST /api/broadcasts/[id]/send` → hitung penerima (kontak tidak diblokir, filter label bila LABEL), isi sentCount=penerima, deliveredCount=~92%, readCount=~78% dari delivered, failedCount=sisa, status "SENT", sentAt=now, TAMBAH juga ke DailyStat hari ini (upsert, tambah sent/delivered/read/failed) → `{ broadcast }`. `DELETE /api/broadcasts/[id]`.
+   104→- `GET /api/quick-replies` → `{ quickReplies }` asc sortOrder. `POST /api/quick-replies` `{ shortcut, message }` (shortcut unik, mulai "/"). `PATCH /api/quick-replies/[id]`. `DELETE /api/quick-replies/[id]`.
+   105→- `GET /api/autoreplies` → `{ greetingEnabled, greetingText, awayEnabled, awayText, storeOpen }`. `PATCH /api/autoreplies` field yang sama.
+   106→
+   107→### API — milik 3-c (STATUS, STATISTIK, LINK, PERANGKAT, PENGATURAN)
+   108→- `GET /api/stories` → `{ mine: Story[], contacts: [{ contactId, name, colorKey, stories: Story[] }] }` (yang belum expiresAt < now), asc createdAt. `POST /api/stories` `{ mediaType: TEXT|IMAGE, body?, mediaUrl?, bgColor? }` → expiresAt = now+24h → `{ story }`. `POST /api/stories/[id]/view` → views+1 → `{ ok: true }`.
+   109→- `GET /api/stats` → `{ totals: {sent, delivered, read, received, failed}, daily: DailyStat[] (14 hari asc), byType: {TEXT, IMAGE, AUDIO, ...} dari tabel Message, topChats: [{name, count}] 5 besar }`.
+   110→- `GET /api/devices` → `{ devices }`. `POST /api/devices` `{ name, platform: WEB|DESKTOP|TABLET }` → `{ device }` (simulasi tautkan). `DELETE /api/devices/[id]` (bukan current) → `{ success: true }`.
+   111→- `GET /api/privacy` → `{ profile }`. `PATCH /api/privacy` (hanya: lastSeen, onlineStatus, profilePhotoVis, statusVis, readReceipts, twoStepEnabled, blockedStrangers, notifMessages, notifGroups, notifCalls, notifPreview, notifSound). Nilai select: "everyone" | "contacts" | "nobody".
+   112→- `GET /api/blocked` → `{ contacts }` (blocked=true). `PATCH /api/blocked/[contactId]` `{ blocked: boolean }` → `{ contact }`.
+   113→- `GET /api/account` → `{ phoneNumber, autoBackup, backups, storage: { messageCount, mediaCount, estSizeKb } }`. `POST /api/account/change-number` `{ newNumber }` → update phoneNumber & phone. `POST /api/account/backup` → buat ChatBackup (hitung pesan) → `{ backup }`. `POST /api/account/restore` → `{ restoredMessages }` (angka besar simulasi). `PATCH /api/account` `{ autoBackup: off|daily|weekly|monthly }`. `POST /api/account/delete` → HANYA simulasi, jangan hapus data → `{ success: true }`.
+   114→- `GET /api/qr?text=<url>` → `{ dataUrl }` via `import QRCode from "qrcode"; await QRCode.toDataURL(text, { width: 512, margin: 2, color: { dark: "#075E54", light: "#ffffff" } })`. (View lain boleh MEMANGGIL route ini, tapi pemiliknya 3-c.)
+   115→
+   116→### API — milik 3-d (CHANNEL, KOMUNITAS, PROMOSI, VERIFIKASI)
+   117→- `GET /api/channels` → `{ channels }` (dengan posts desc, max 10/channel, dan `likedByMe`). `POST /api/channels` `{ name, description?, colorKey? }` → handle otomatis dari nama (slug) + suffix angka jika duplikat, isMine=true, following=true → `{ channel }`.
+   118→- `POST /api/channels/[id]/follow` → toggle following & followers±1 → `{ channel }`.
+   119→- `POST /api/channels/[id]/posts` `{ body, imageUrl? }` → `{ post }`. `POST /api/posts/[id]/like` → toggle likedByMe, likes±1 → `{ post }`. `DELETE /api/posts/[id]` → `{ success: true }`.
+   120→- `GET /api/communities` → `{ communities }`. `PATCH /api/communities/[id]` `{ announcement }` → `{ community }`.
+   121→- `GET /api/verification` → `{ verificationStatus, verified, brandProtected, profile }`. `POST /api/verification/apply` → status jadi "PENDING" → `{ verificationStatus }`. `POST /api/verification/check` → jika PENDING → jadi "VERIFIED" + verified=true → `{ verificationStatus, verified }`. `PATCH /api/verification` `{ brandProtected }` → `{ brandProtected }`.
+   122→
+   123→### Pembagian file (BATAS KERAS)
+   124→- 3-a: `src/app/api/charts-dummy-jangan-dibuat/**` TIDAK ADA — hanya: `src/app/api/chats/**`, `src/app/api/messages/[id]/**`, `src/app/api/simulate/**`, `src/app/api/contacts/**`, `src/app/api/calls/**`, `src/components/views/ChatsView.tsx`, boleh bikin sub-komponen di `src/components/chat/**`.
+   125→- 3-b: `src/app/api/profile/**`, `src/app/api/products/**`, `src/app/api/collections/**`, `src/app/api/labels/**`, `src/app/api/broadcasts/**`, `src/app/api/quick-replies/**`, `src/app/api/autoreplies/**`, views + sub-komponen `src/components/business/**`.
+   126→- 3-c: `src/app/api/stories/**`, `src/app/api/stats/**`, `src/app/api/devices/**`, `src/app/api/privacy/**`, `src/app/api/blocked/**`, `src/app/api/account/**`, `src/app/api/qr/**`, views + `src/components/extras/**`.
+   127→- 3-d: `src/app/api/channels/**`, `src/app/api/posts/**`, `src/app/api/communities/**`, `src/app/api/verification/**`, views + `src/components/social/**`.
+   128→
+   129→Catatan: route `/api/contacts` milik 3-a tapi 3-b boleh menambah subroute `/api/contacts/[id]/labels` (pemilik 3-b) — tidak bentrok.
+   130→
+   131→---
+   132→
+   133→## Task ID: 3-b (SELESAI)
+   134→Agent: 3-b (Business Tools)
+   135→Task: API + View modul BISNIS (Profil Bisnis, Katalog, Label, Siaran, Pesan Otomatis)
+   136→
+   137→Work Log:
+   138→- API dibuat (semua pattern `ok/bad`, `db` dari `@/lib/db`, params Next 16 sebagai Promise):
+   139→  - `/api/profile` GET/PATCH — hanya field bisnis (businessName, ownerName, category, description, address, lat, lng, email, website, instagram, facebook, tiktok, hours JSON string, logoUrl). Upsert profil id "main" agar aman bila row belum ada.
+   140→  - `/api/products` GET/POST + `/api/products/[id]` PATCH/DELETE — SKU otomatis `BJ-<3 huruf nama>-<rand>` (loop cek unik), validasi harga/stok/koleksi, PATCH parsial (sku kosong → regenerate).
+   141→  - `/api/collections` GET/POST (dengan `_count.products`) + `/api/collections/[id]` PATCH/DELETE — DELETE melepas produk (`updateMany collectionId=null`) sebelum hapus.
+   142→  - `/api/labels` GET/POST + `/api/labels/[id]` PATCH/DELETE — GET mengembalikan `{ labels, contacts }` dengan `contact.labels` hasil parse labelIds; DELETE membuang id label dari labelIds SEMUA kontak (findMany `contains` → update per kontak). colorKey divalidasi terhadap 12 kunci valid.
+   143→  - `/api/contacts/[id]/labels` PATCH — `{ labelIds: string[] }`, validasi semua id label ada, kembalikan `{ contact }` + labels terurai.
+   144→  - `/api/broadcasts` GET/POST + `/api/broadcasts/[id]` DELETE + `/api/broadcasts/[id]/send` POST — send: penerima = kontak non-blocked (filter label bila audienceType=LABEL), sentCount=penerima, delivered≈92%, read≈78% dari delivered, failed=sisa, status SENT, sentAt=now, plus upsert DailyStat hari ini (format date `YYYY-MM-DD`, increment sent/delivered/read/failed). Guard: tidak bisa kirim 2x.
+   145→  - `/api/quick-replies` GET/POST + `/api/quick-replies/[id]` PATCH/DELETE — shortcut otomatis diawali "/", unik (cek duplikat), sortOrder max+1.
+   146→  - `/api/autoreplies` GET/PATCH — subset field Profile (greetingEnabled, greetingText, awayEnabled, awayText, storeOpen).
+   147→- Sub-komponen `src/components/business/`: `types.ts` (tipe + parseLabelIds + parseHours/defaultHours + WEEK_DAYS + VALID_COLOR_KEYS), `media.ts` (fileToDataUrl maks 2,5 MB + PRESET_PRODUCT_IMAGES), `WaImg.tsx` (wrapper <img> data URL/lokal), `ViewHeader.tsx`, `EmptyState.tsx`, `ProductDialog.tsx` (form produk + pilih gambar preset/unggah), `CartSheet.tsx` (keranjang zustand: stepper qty, hapus, total, Buat Pesanan → ringkasan + salin + clear + toast).
+   148→- View (ganti stub, semua `h-full flex flex-col`, header sendiri via ViewHeader, self-fetch `cache: "no-store"`, skeleton, empty state, responsif, Bahasa Indonesia):
+   149→  - `BusinessProfileView`: logo besar + edit (data URL ≤2,5 MB), form lengkap (nama, pemilik, kategori, deskripsi, alamat, email, website, telepon read-only), koordinat lat/lng + link Google Maps, media sosial (prefix @ / fb.com/ otomatis, strip saat simpan), editor Jam Operasional 7 hari (Switch + time input, serialize JSON), Simpan → PATCH + toast "Profil disimpan". Desktop: Edit + Pratinjau berdampingan (grid 3:2, kartu pratinjau ala halaman info bisnis WA: logo, kategori, verified, deskripsi, alamat, jam operasional dengan penanda hari ini, kontak, medsos). Mobile: Tabs "Edit"/"Pratinjau" (render via matchMedia agar tidak ada duplikat id input).
+   150→  - `CatalogView`: header count + pencarian + filter Koleksi (Select) + tombol Keranjang (badge qty dari useCart) + Tambah Produk. Grid kartu produk (gambar h-40 object-cover / gradient+ikon, badge SKU mono, harga formatRupiah, stok merah bila 0, badge koleksi, Switch available inline PATCH optimistis, menu Edit/Hapus + AlertDialog). Dialog produk: semua field + SKU placeholder otomatis + koleksi + gambar (unggah / 6 preset / hapus) + switch tersedia. Keranjang: Sheet kanan, item list max-h scroll, qty stepper, subtotal, total cartTotal, "Buat Pesanan" → ringkasan teks (produk x qty — subtotal, total) + salin + clear + toast "Pesanan dibuat — kirim ke pelanggan lewat chat".
+   151→  - `LabelsView`: grid kartu label (dot warna colorOf, jumlah kontak, klik → dialog Terapkan) dengan menu Edit/Terapkan/Hapus; dialog label (nama + Select warna 12 kunci dengan preview dot); dialog Terapkan per label (daftar kontak + Checkbox + pencarian, PATCH per kontak via /api/contacts/[id]/labels, spinner per baris); seksi "Kelola Kontak": cari kontak, avatar inisial, chip label per kontak, tombol Label → dialog atur label per kontak. DELETE label konfirmasi AlertDialog (menyebut jumlah kontak terdampak).
+   152→  - `BroadcastView`: kartu compose (nama, pesan + counter 0/1024, Select audiens Semua Kontak / per label, unggah gambar opsional + preview + hapus, "Kirim Siaran" → POST create → POST send → toast jumlah penerima + reset + reload). Riwayat: kartu per siaran (nama, badge Terkirim/Draf, waktu waListTime, audiens, preview pesan, thumbnail media); statistik bar bertumpuk Dibaca(sky)/Diterima(teal)/Terkirim(emerald)/Gagal(red) + legenda jumlah + total penerima; Draf punya tombol "Kirim"; hapus via AlertDialog.
+   153→  - `AutoRepliesView`: 4 kartu — Status Toko (switch besar berwarna Buka hijau/Tutup merah + simpan), Pesan Sambutan (switch + textarea + hint), Pesan di Luar Jam Kerja (switch + textarea + hint), Balasan Cepat (daftar shortcut mono + pesan + edit/hapus, dialog tambah/edit dengan validasi "/" otomatis & unik, empty state). Simpan per kartu → PATCH /api/autoreplies + toast.
+   154→- QA: `bunx tsc --noEmit` bersih untuk semua file src; ESLint bersih (0 error 0 warning) di semua file milik 3-b. Smoke test curl semua endpoint: produk CRUD + auto SKU, koleksi CRUD + pelepasan produk, label attach/detach kontak, broadcast send (10 penerima → 9 diterima, 7 dibaca, 1 gagal) + DailyStat naik, guard resend, quick reply auto-slash + dup guard, PATCH profil & autoreplies. Halaman `/` 200, dev.log tanpa error.
+   155→- Tidak menyentuh file di luar batas (schema, AppShell, lib, view/route milik agent lain).
+   156→
+   157→Stage Summary:
+   158→- Modul Bisnis (3-b) SELESAI dan teruji: Profil Bisnis (edit + pratinjau gaya WA), Katalog Produk + Keranjang → Pesanan, Label Pelanggan (assign dua arah), Siaran (compose → kirim → statistik + DailyStat), Pesan Otomatis (status toko, sambutan, luar jam kerja, balasan cepat).
+   159→- Kontrak API dihormati persis; DailyStat memakai format tanggal `YYYY-MM-DD` (toISOString().slice(0,10)) — konsisten dengan seed; route send aman dipanggil ulang (tolak jika sudah SENT).
+   160→- Catatan untuk agent lain: `/api/products`, `/api/labels`, `/api/broadcasts` sudah bisa dipakai; field `audienceLabelName` ikut dikirim pada GET /api/broadcasts; parse labelIds bisa pakai helper `parseLabelIds` dari `src/components/business/types.ts`.
+   161→
+   162→---
+   163→
+   164→## Task ID: 3-c
+   165→Agent: agent-3-c (STATUS, STATISTIK, LINK BISNIS, PERANGKAT, PENGATURAN)
+   166→Task: API + views untuk Status/Story, Statistik Pesan, Link Bisnis (wa.me + QR), Perangkat Tertaut, dan Pengaturan (Privasi/Notifikasi/Akun).
+   167→
+   168→Work Log:
+   169→- API dibuat sesuai kontrak (Next.js 16, params Promise, balasan `ok()`/`bad()`):
+   170→  - `GET/POST /api/stories` (exclude expired, group per kontak; POST expiresAt = now+24h), `POST /api/stories/[id]/view` (views+1).
+   171→  - `GET /api/stats` → totals (sum DailyStat), daily 14 hari asc, byType (groupBy Message.type), topChats 5 (groupBy Message.chatId).
+   172→  - `GET/POST /api/devices`, `DELETE /api/devices/[id]` (menolak hapus perangkat `current`).
+   173→  - `GET/PATCH /api/privacy` (whitelist 12 field; nilai select divalidasi everyone|contacts|nobody).
+   174→  - `GET /api/blocked`, `PATCH /api/blocked/[contactId] { blocked }`.
+   175→  - `GET /api/account` (phoneNumber, autoBackup, backups, storage {messageCount, mediaCount, estSizeKb}), `PATCH /api/account { autoBackup }`, `POST change-number`, `POST backup` (ChatBackup dengan hitungan pesan riil), `POST restore` (simulasi), `POST delete` (SIMULASI — data tidak dihapus).
+   176→  - `GET /api/qr?text=` → QRCode.toDataURL width 512, dark #075E54.
+   177→- Views (semua "use client", full-height + header sendiri, skeleton loading, toast, aria-label, responsif):
+   178→  - `StatusView` + extras: `StoryRingAvatar` (cincin gradient .wa-story-ring), `CreateStatusDialog` (tabs Teks 5 warna / Foto ≤2,5MB data URL + caption), `StoryViewer` (Dialog gelap layar penuh, progress bar per status auto-advance 5 dtk, zona klik kiri/kanan + panah + keyboard, caption, jumlah tayangan + Eye, POST view untuk status kontak, tutup otomatis di akhir).
+   179→  - `StatsView`: 5 kartu ringkasan (Terkirim emerald, Diterima teal, Dibaca sky, Gagal red, Total), AreaChart recharts 3 garis + gradient, BarChart byType dengan warna bervariasi, Chat Teratas dengan Progress bar.
+   180→  - `LinkView`: form nomor (prefill dari /api/privacy, normalisasi 0→62) + pesan otomatis, link wa.me mono box, Salin (clipboard) + Uji (tab baru), QR otomatis (debounce 400ms) + unduh PNG, tombol Bagikan WhatsApp/Facebook/X, kartu tips.
+   181→  - `DevicesView`: daftar sesi aktif (ikon per platform, badge "Sesi ini", Keluar via AlertDialog), `LinkDeviceDialog` (QR + kode BJ-XXXX-XXXX + form nama/jenis → POST), kartu info multi-perangkat.
+   182→  - `SettingsView` (Tabs Privasi/Notifikasi/Akun) + extras `SettingsRow`, `SettingsPrivacyTab` (4 Select privasi, read receipts + peringatan, verifikasi dua langkah dengan Dialog InputOTP 6 digit, blokir nomor tak dikenal, daftar blokir + buka blokir), `SettingsNotificationsTab` (5 Switch), `SettingsAccountTab` (Ubah Nomor dialog, Backup Chat: Select frekuensi + Backup Sekarang + daftar backup + Pulihkan, Penyimpanan dengan Progress vs 4 GB, Hapus Akun AlertDialog konfirmasi ganda ketik "HAPUS" — simulasi).
+   183→- Data demo: seed lama membuat story kontak dengan expiresAt di masa lampau; ditambahkan 3 story kontak aktif (Siti/Maya/Budi) langsung ke DB agar demo hidup (bukan perubahan kode/seed).
+   184→- Aset: folder `public/images/` kosong (logo.png & product-*.png & story-promo.png dijanjikan seed tapi belum ada) → 8 gambar digenerate via z-ai CLI sehingga story/katalog/logo tampil.
+   185→- Verifikasi: `bunx tsc --noEmit` → 0 error di semua file 3-c (error tersisa milik agent lain/examples); ESLint bersih untuk seluruh file 3-c (0 error, 0 warning); smoke test curl semua endpoint stories/stats/devices/privacy/blocked/account/qr → 200 & payload sesuai kontrak; mutations (POST story/view/device/backup/restore/delete, PATCH privacy/blocked/account) diuji dan data uji dibersihkan.
+   186→
+   187→Stage Summary:
+   188→- 3-c SELESAI: 14 route API + 5 views + 7 sub-komponen extras. Status viewer, statistik recharts, QR wa.me, multi-device, dan pengaturan 3 tab siap dipakai. Route `/api/qr` boleh dipakai view lain (mis. VerificationView). Tidak ada perubahan schema/seed/AppShell. CATATAN untuk agent lain: `public/images/` kini berisi logo.png, product-{kopi,keripik,batik,tas,madu,songket}.png, story-promo.png.
+   189→---
+   190→
+   191→## Task ID: 3-a
+   192→Agent: general-purpose
+   193→Task: Fitur CHAT lengkap (API + UI ChatsView ala WhatsApp Web)
+   194→
+   195→Work Log:
+   196→- API dibuat (semua pakai `ok/bad`, params Promise ala Next 16):
+   197→  - `src/app/api/chats/_map.ts` — helper bersama: `mapChat` (enrich colorKey dari kontak + `lastMessage.senderName`), `mapMessage` (enrich `senderName`/`senderColorKey`), `contactNameMap`, `getChatFull`, `MESSAGE_TYPES`.
+   198→  - `GET /api/chats?filter=all|unread|groups|archived&q=` — filter arsip/unread/grup, pencarian nama kontak/grup + isi pesan, urut pinned → lastMessageAt desc.
+   199→  - `POST /api/chats` — PRIVATE pakai chat lama bila ada; chat baru dapat pesan SYSTEM greeting otomatis jika `profile.greetingEnabled` (fallback teks default). GROUP: nama + memberIds (anggota pertama admin), warna acak, pesan SYSTEM "Grup dibuat".
+   200→  - `PATCH /api/chats/[id]` (pinned/archived/muted/unread/name/groupDesc), `DELETE /api/chats/[id]` (pesan cascade).
+   201→  - `GET /api/chats/[id]/messages` → `{ chat, messages asc, participants }` (participants = kontak/anggota grup, dipakai header & info sheet).
+   202→  - `POST /api/chats/[id]/messages` — simpan sender "me" status SENT, validasi tipe + konten, update lastMessageAt.
+   203→  - `DELETE /api/messages/[id]`.
+   204→  - `POST /api/simulate/progress` — SENT → DELIVERED (`{ updated }`).
+   205→  - `POST /api/simulate/reply` — tandai pesan saya SENT/DELIVERED → READ; away-message bila `awayEnabled && !storeOpen`; selain itu LLM `z-ai-web-dev-sdk` (server only, `thinking: disabled`, timeout 15 dtk via Promise.race, prompt melarang prefiks nama) dengan fallback statis 5 balasan; pengirim = kontak (PRIVATE) / anggota acak (GROUP).
+   206→  - `GET /api/contacts`, `PATCH /api/contacts/[id]` (blocked/name/about), `GET /api/calls`, `POST /api/calls` (resolve nama+warna kontak).
+   207→- Komponen `src/components/chat/`:
+   208→  - `types.ts`, `ChatAvatar.tsx`, `MessageBubble.tsx` (semua tipe pesan: IMAGE+caption, VIDEO, AUDIO voice-note dengan play/pause + waveform statis deterministik + durasi dari body/metadata, DOC + unduh, LOCATION kartu peta + link Google Maps, CONTACT_CARD + wa.me, PRODUCT kartu gambar+harga dari lookup /api/products, SYSTEM pill italic; tick PENDING/SENT/DELIVERED/READ/FAILED; menu hapus per pesan on-hover), `ChatListPanel.tsx` (header Chat, dropdown Chat Baru/Grup Baru, pencarian, chip filter, baris avatar+preview "Anda:"/"Nama:"+badge unread+pinned/muted ikon, menu per baris: pin/arsip/bisukan/tandai dibaca/hapus dengan AlertDialog), `NewChatDialogs.tsx` (NewChatDialog pilih kontak; NewGroupDialog nama+checkbox anggota), `ConversationPanel.tsx` (header back/avatar/presence online-terakhir dilihat/anggota grup + tombol panggilan & info; area `.wa-chat-bg` auto-scroll, pemisah hari waDayLabel, polling 15 dtk yang skip saat ada pesan optimist, alur kirim PENDING→POST→SENT→900ms progress→2.5-5 dtk reply; hapus pesan; buka blokir), `Composer.tsx` (emoji popover 28 emoji, "+": Foto&Video/Dokumen (FileReader data URL, tolak >2,5 MB dengan toast), Lokasi Bisnis (koordinat tetap Malioboro) & Lokasi Saat Ini (geolocation + fallback acak Jogja), Kontak → CONTACT_CARD, Produk → PRODUCT; mic MediaRecorder → rekam bar (dot merah pulsing + timer + batal + kirim) → AUDIO base64 dengan body `Pesan suara (m:ss)`; tombol jadi Send saat ada teks; saran quick-reply melayang saat input diawali "/" dari GET /api/quick-replies; bar blokir), `CallDialog.tsx` (overlay penuh, avatar `.wa-pulse`, Memanggil… → Berlangsung + timer 3 dtk, tombol merah akhiri → POST /api/calls), `ChatInfoSheet.tsx` (info kontak/grup: tentang, telepon, jumlah media, label readonly dari /api/labels, anggota grup + role, switch blokir → PATCH kontak).
+   209→  - `src/components/views/ChatsView.tsx` — dua panel penuh: daftar 380-400px + percakapan; mobile: daftar → percakapan layar penuh dengan tombol kembali; empty state desktop (logo + "WhatsApp Bisnis Panel"); debounced search server-side + refresh daftar tiap aksi; unread=0 (optimis + PATCH persist) saat chat dibuka.
+   210→- Aset: `public/images/` kosong saat mulai — saya regenerasi 8 gambar seed (logo.png, product-kopi/keripik/batik/tas/madu/songket.png, story-promo.png) via image-generation agar path yang direferensikan DB tidak 404 (membantu semua view).
+   211→
+   212→Stage Summary:
+   213→- Semua endpoint chat berfungsi teruji end-to-end via curl + browser: kirim teks/produk/quick-reply, tick DELIVERED/READ, balasan LLM berbahasa Indonesia tanpa prefiks nama, away-message, greeting otomatis, grup, pin/arsip/bisukan/tandai dibaca, hapus chat/pesan, blokir kontak, riwayat panggilan tersimpan.
+   214→- `bunx tsc --noEmit` & ESLint bersih untuk seluruh file milik 3-a (error tersisa hanya di file agent lain: LabelsView, examples/, skills/, prisma/seed.ts).
+   215→- Deviasi kecil (additif, tidak merusak kontrak): respons GET chats/messages/enrich `senderName`/`senderColorKey`/`participants`; PRODUCT card menampilkan harga dari GET /api/products dengan placeholder bila tidak ditemukan; PRODUCT message dikirim dengan `body` = nama produk.
+   216→- Catatan untuk agent lain: jangan override `public/images/*` kecuali perlu; fitur chat hanya membaca `/api/products`, `/api/quick-replies`, `/api/labels` (semua sudah hidup).
+   217→
+   218→---
+   219→
+   220→## Task ID: 3-d (SELESAI)
+   221→Agent: 3-d (Channels / Community / Promotions / Verification)
+   222→Task: API channel+komunitas+verifikasi & 4 view (ChannelsView, CommunityView, PromotionsView, VerificationView)
+   223→
+   224→Work Log:
+   225→- API Channel: `GET/POST /api/channels` (posts desc max 10; POST auto-slug dari nama + suffix `-2`,`-3`… bila duplikat, isMine=true, following=true), `POST /api/channels/[id]` DAN `POST /api/channels/[id]/follow` (kedua path toggle ikuti, followers±1 — kontrak & batas file keduanya terlayani), `POST /api/channels/[id]/posts` {body,imageUrl?} (validasi body/image, views awal acak kecil), `GET /api/channels/[id]` bonus detail.
+   226→- API Posts: `POST /api/posts/[id]/like` + `POST /api/posts/[id]?action=like` (toggle likedByMe, likes±1, keduanya balas `{post}`), `DELETE /api/posts/[id]` → `{success:true}`.
+   227→- API Communities: `GET /api/communities`, `PATCH /api/communities/[id]` {announcement}.
+   228→- API Verification: `GET /api/verification` → {verificationStatus, verified, brandProtected, profile}, `PATCH /api/verification` {brandProtected}, `POST /api/verification/apply` (NONE→PENDING, tolak bila sudah PENDING/VERIFIED), `POST /api/verification/check` (PENDING→VERIFIED+verified=true). Semua route `export const dynamic = "force-dynamic"`, params Next 16 = Promise.
+   229→- Sub-komponen `src/components/social/`: ChannelPostCard (suka optimistis + Eye views + timeAgo + menu hapus), ChannelComposer (textarea + unggah data URL ≤2,5 MB + picker 6 gambar produk preset), CreateChannelDialog (nama/deskripsi/warna emerald-amber-purple-teal-pink), AdCampaignCard, SocialConnectCard, ChatButtonCard, QrPromoCard, PromoTemplatesCard.
+   230→- ChannelsView: 3 seksi (Channel Saya dengan komposer & daftar unggahan + hapus via AlertDialog; Channel yang Anda Ikuti dengan baris expand feed; Temukan Channel dengan tombol Ikuti) + Dialog Buat Channel + toast; suka = optimistis lalu sinkron API.
+   231→- CommunityView: header komunitas (avatar inisial, anggota, deskripsi), kartu Pengumuman + Edit (PATCH), grid grup dengan badge "Grup pengumuman" untuk grup pertama + dialog kirim pengumuman demo (toast "… anggota (demo)"), empty state + Buat Komunitas (demo lokal).
+   232→- PromotionsView: 5 kartu — Iklan Klik-ke-WhatsApp (dialog tujuan/anggaran slider Rp50–500rb/audiens + pratinjau story-promo.png + terbitkan demo, daftar iklan persist di localStorage via useSyncExternalStore), Integrasi FB/IG (switch localStorage + "12 interaksi minggu ini"), Tombol Chat WhatsApp (pratinjau bubble + snippet wa.me + salin), QR Promosi (input promo → link wa.me → GET /api/qr (milik 3-c) → unduh PNG), Template Promo (3 template + Salin Teks).
+   233→- VerificationView: hero status (abu/amber/emerald gradient), 4 kartu manfaat dengan ikon Lock saat belum verifikasi, dialog checklist 4 syarat (semua wajib) → apply → kartu progres animasi + polling POST /check tiap 3 dtk (maks 9 dtk) → toast 🎉 + UI emerald ShieldCheck, Switch Perlindungan Merek (PATCH optimistis), kartu Dukungan Prioritas (tiket demo), catatan visibilitas pencarian.
+   234→- Gambar `public/images/` kosong (logo/product-*/story-promo 404) → dibuat via z-ai image CLI 8 file: logo, product-kopi/keripik/batik/tas/madu/songket (1024x1024), story-promo (1344x768).
+   235→- QA via agent-browser: alur ikuti/unfollow, suka, buat+hapus unggahan, buat channel, edit pengumuman, kirim pengumuman grup, buat iklan (localStorage), QR termuat (data:image/png), verifikasi NONE→PENDING→VERIFIED + switch brandProtected, semuanya berjalan; state demo dikembalikan ke kondisi seed (verification NONE, following sesuai seed, channel uji & localStorage dibersihkan).
+   236→- Bug ditemukan & diperbaiki: DialogContent AdCampaignCard tertanam tanpa wrapper `<Dialog>` (crash DialogPortal di view Promosi) — diperbaiki; dialog kini scrollable `max-h-[85vh]`.
+   237→- `bunx tsc --noEmit` & ESLint bersih untuk seluruh file milik 3-d (sisa error tsc hanya di file agent lain/seed/examples).
+   238→
+   239→Stage Summary:
+   240→- Kontrak API 3-d lengkap di `/api/channels/**`, `/api/posts/**`, `/api/communities/**`, `/api/verification/**` — view lain BOLEH memanggil GET endpoint tersebut.
+   241→- localStorage keys yang dipakai 3-d: `bj_promo_ads`, `bj_social_fb`, `bj_social_ig` (jangan dipakai agent lain).
+   242→- `POST /api/verification/check` langsung meloloskan PENDING→VERIFIED (by design, agar polling view selesai ~3 dtk).
+   243→- Jangan jalankan ulang seed jika ingin mempertahankan state (state demo dikembalikan seperti seed).
+   244→
+   245→---
+   246→Task ID: 5
+   247→Agent: main (orkestrator)
+   248→Task: Integrasi akhir, lint, dan verifikasi browser end-to-end
+   249→
+   250→Work Log:
+   251→- Verifikasi semua 4 subagent menyelesaikan scope-nya (worklog 3-a/3-b/3-c/3-d lengkap, semua view + API ada).
+   252→- Perbaikan kecil: `prisma/seed.ts` typing statRows; hapus 2 eslint-disable tidak terpakai di AppShell.tsx.
+   253→- Fitur tambahan hasil temuan verifikasi: tombol "Tambah ke Keranjang" pada kartu produk katalog (sebelumnya keranjang tidak punya jalur tambah) — via `useCart` + toast, plus item menu dropdown.
+   254→- `bunx tsc --noEmit` → 0 error di src (sisa error hanya examples/ & skills/ bawaan scaffold). `bun run lint` → 0 error 0 warning.
+   255→- Server dev di-restart permanen via `start-stop-daemon` (proses background tool call ternyata di-reap; OOM kill terjadi saat dev server 1.9GB + Chromium bersamaan di sandbox 4GB).
+   256→- Verifikasi browser (agent-browser) pada 1280x800 & 390x844:
+   257→  - Chat: daftar + badge unread, buka percakapan, kirim pesan → tick DELIVERED → balasan LLM natural (terbukti), kartu produk di chat, pesan gambar, daftar chat ter-refresh.
+   258→  - Semua 15 view diklik satu per satu & dirender sempurna: Chat, Status (+story viewer full-screen dengan progress bar), Channel (feed + composer), Komunitas (pengumuman), Katalog (grid + SKU + stok), Label (8 label + kelola kontak), Siaran (form + riwayat), Pesan Otomatis, Profil Bisnis (form + pratinjau), Link Bisnis (wa.me + QR asli + share), Promosi, Verifikasi, Statistik (chart recharts), Perangkat Tertaut (4 sesi), Pengaturan (privasi/notifikasi/akun).
+   259→  - Keranjang: tambah produk → badge 1 item → sheet qty/total → "Buat Pesanan" → ringkasan + toast + keranjang kosong.
+   260→  - Mobile: hamburger drawer, list chat full-width, percakapan fullscreen dengan tombol kembali, composer tetap di bawah.
+   261→  - Console: 0 error; dev.log: 0 error runtime.
+   262→- Browser ditutup setelah verifikasi agar memori lega; dev server tetap berjalan (HTTP 200).
+   263→
+   264→Stage Summary:
+   265→- APLIKASI SELESAI & TERVERIFIKASI. 15 fitur menu sesuai permintaan user, data demo UMKM "Toko Berkah Jaya", UI Bahasa Indonesia bertema WhatsApp hijau, responsif desktop & mobile.
+   266→
+   267→---
+   268→Task ID: 6
+   269→Agent: main (orkestrator)
+   270→Task: Ubah sidebar desktop menjadi rail ikon saja (hemat ruang) sesuai feedback user
+   271→
+   272→Work Log:
+   273→- Feedback user: modul Chat/Status/Channel/Komunitas (Komunikasi) dan semua modul grup lain (Toko/Bisnis/Lainnya) sebaiknya hanya menampilkan logo/icon agar tidak memakan ruangan.
+   274→- Edit `src/components/AppShell.tsx`:
+   275→  - Sidebar desktop diubah dari `w-72 lg:w-80` berlabel menjadi rail ikon `w-16` (64px) ala WhatsApp Web asli.
+   276→  - Komponen baru `NavRail`: logo bisnis saja di atas (klik → Profil Bisnis), tombol ikon 40x40 rounded-xl per modul, separator garis kecil antar grup (pengganti label KOMUNIKASI/TOKO/BISNIS/LAINNYA), indikator aktif (bg-accent + bar vertikal primary + ikon primary), ikon Info di bawah untuk versi aplikasi.
+   277→  - Nama modul muncul via Tooltip (side="right", shadcn Tooltip) saat hover; `aria-label` di setiap tombol agar tetap accessible & bisa dites via role/name.
+   278→  - `NavList` berlabel dipertahankan HANYA untuk drawer mobile (Sheet) — tidak memakan ruang permanen dan lebih mudah digunakan di layar sentuh (tanpa hover tooltip).
+   279→- Verifikasi: `bunx tsc --noEmit` 0 error, `bun run lint` bersih; agent-browser 1280x800: rail ikon tampil, klik Katalog Produk & Statistik Pesan via aria-label berhasil navigasi + indikator aktif pindah, tooltip "Pengaturan" muncul saat hover; mobile 390x844: drawer berlabel tetap berfungsi; dev.log tanpa error runtime.
+   280→
+   281→Stage Summary:
+   282→- Sidebar desktop kini rail ikon 64px (hanya icon + tooltip), ruang horizontal bertambah ~256px untuk konten utama. Drawer mobile tetap berlabel. Tidak ada perubahan API/view lain.
+   283→
+   284→---
+   285→Task ID: 7
+   286→Agent: main (orkestrator)
+   287→Task: Perbaiki ruang chat agar memenuhi seluruh lebar halaman (feedback user + gambar kotak merah)
+   288→
+   289→Work Log:
+   290→- Akar masalah: di `ChatsView.tsx`, wrapper panel percakapan adalah `display:flex` (arah baris), tetapi root `ConversationPanel.tsx` hanya punya `flex flex-col h-full min-w-0` TANPA `flex-1` → sebagai flex child ia menyusut ke lebar konten (~510px) menyisakan area putih kosong di kanan pada layar lebar.
+   291→- Fix 1 baris: root ConversationPanel menjadi `flex flex-col h-full flex-1 w-full min-w-0 bg-[#f0f2f5]` → header, area pesan, dan composer kini membentang penuh sampai tepi kanan.
+   292→- Verifikasi agent-browser 1920x941: buka chat Agus Salim — panel percakapan memenuhi seluruh sisa lebar (tidak ada ruang kosong), kirim pesan uji "Tes layout baru" → terkirim, status READ, daftar chat ter-refresh; pesan uji dihapus via DELETE /api/messages/[id] agar data demo bersih.
+   293→- Verifikasi mobile 390x844: percakapan tetap layar penuh + tombol kembali, semua tipe pesan (teks, PDF, voice note, lokasi) tampil benar, composer di bawah.
+   294→- dev.log: 0 error runtime.
+   295→
+   296→Stage Summary:
+   297→- Panel percakapan chat kini flex-1 sehingga ruang chat meliputi seluruh halaman di semua ukuran layar. Perubahan hanya 1 class di `src/components/chat/ConversationPanel.tsx`, tidak menyentuh API/view lain.
+   298→
+   299→---
+   300→Task ID: 8
+   301→Agent: main (orkestrator)
+   302→Task: Atasi hydration error "A tree hydrated but some attributes of the server rendered HTML didn't match"
+   303→
+   304→Work Log:
+   305→- Reproduksi: agent-browser 1280x800 + klik seluruh 15 modul → TIDAK ada hydration error; diff atribut SSR (curl) vs DOM client (eval) identik untuk html/body/div teratas; tidak ada artefak ekstensi. Simpulan: mismatch berasal dari modifikasi DOM di sisi browser user (Chrome auto-translate / ekstensi jenis Grammarly) atau error transien saat file diedit saat preview terbuka (HMR).
+   306→- Audit determinisme SSR: layout (html/body), AppShell, NavRail, ChatsView (skeleton saat SSR), Toaster (render kosong sampai toast) — semuanya deterministik; seluruh pemakaian Date.now()/Math.random()/toLocale* hanya di event handler/fetch client-side (aman).
+   307→- Hardening di `src/app/layout.tsx`:
+   308→  - `<html lang="id">` (sebelumnya "en"; konten berbahasa Indonesia — lang salah memicu prompt auto-translate Chrome yang memutasi DOM → penyebab #1 error ini).
+   309→  - `suppressHydrationWarning` pada `<body>` (mitigasi resmi utk injeksi atribut oleh ekstensi browser, melengkapi html).
+   310→  - `<meta name="google" content="notranslate">` via metadata.other agar auto-translate tidak memodifikasi DOM.
+   311→- Verifikasi: tsc 0 error, lint bersih; SSR mengeluarkan lang="id" + meta notranslate; browser reload → html attributes benar, 0 page error, 0 console hydration warning setelah load + navigasi antar modul.
+   312→
+   313→Stage Summary:
+   314→- Aplikasi tervalidasi bebas hydration mismatch dari sisi kode (SSR deterministik); sumber eksternal (translate/ekstensi) dimitigasi via lang="id" + suppressHydrationWarning + notranslate. Jika user masih melihat error lama di overlay dev, cukup refresh halaman (overlay dev menyimpan error transien lama).
+   315→
+   316→---
+   317→Task ID: 9
+   318→Agent: main (orkestrator)
+   319→Task: Jawab kebingungan user "logout hilang/tampilan berubah" + tambahkan tombol Keluar yang mudah ditemukan
+   320→
+   321→Work Log:
+   322→- Investigasi: aplikasi (WA Bisnis Panel — Toko Berkah Jaya) TIDAK PERNAH punya logout akun; satu-satunya "Keluar" adalah keluar per-perangkat di view Perangkat Tertaut. Perubahan yang membuat user kehilangan arah: Task 6 mengubah sidebar desktop dari daftar berlabel menjadi rail ikon (label hanya muncul via tooltip).
+   323→- Komponen baru `src/components/extras/LogoutFlow.tsx`: LogoutButton 3 penampilan (icon rail / row drawer / block settings) dengan AlertDialog konfirmasi "Keluar dari WA Bisnis Panel?"; LoggedOutScreen (logo + "Anda telah keluar" + tombol "Masuk Kembali"); performLogout() membersihkan localStorage demo (bj_promo_ads, bj_social_fb, bj_social_ig) + set sessionStorage `wa_logged_out` + reload.
+   324→- AppShell: status keluar dibaca via useSyncExternalStore(noopSubscribe, isLoggedOut, () => false) — aman SSR/hydration, tanpa set-state-in-effect; jika keluar → render LoggedOutScreen penuh; tombol Keluar ikon ditambah di dasar NavRail desktop (di atas Info, tooltip "Keluar"); baris "Keluar" merah ditambah di dasar drawer mobile.
+   325→- SettingsAccountTab: kartu "Keluar" ditambah di dasar tab Akun (setelah Zona Bahaya) dengan tombol block.
+   326→- Bug diperbaiki saat verifikasi: AlertDialogTrigger asChild membungkus TooltipProvider (non-DOM) membuat klik ikon rail tidak membuka dialog — direstrukturisasi: setiap penampilan punya trigger sendiri, ikon = TooltipTrigger > AlertDialogTrigger > button.
+   327→- Verifikasi agent-browser: desktop 1280x800 (ikon rail → dialog → Keluar → layar "Anda telah keluar" → Masuk Kembali → aplikasi kembali normal), mobile 390x844 (drawer → baris Keluar → dialog → Batal), Settings → tab Akun (tombol Keluar → dialog → Batal). `bunx tsc --noEmit` + `bun run lint` bersih; dev.log tanpa error runtime baru; HTTP 200.
+   328→
+   329→Stage Summary:
+   330→- Logout kini ada di 3 tempat mudah ditemukan (rail desktop, drawer mobile, Pengaturan → Akun) dengan konfirmasi + layar "Anda telah keluar" + "Masuk Kembali". Penjelasan ke user: tampilan berubah karena rail ikon (Task 6), dan logout akun memang belum pernah ada sebelumnya.
+   331→
+   332→---
+   333→Task ID: 2-c
+   334→Agent: general-purpose
+   335→Task: Ganti verifikasi bisnis PALSU (auto-approve /api/verification/check) menjadi alur review NYATA berbasis 9 kriteria + UI VerificationView jujur (checklist kriteria, riwayat, toast hasil)
+   336→
+   337→Work Log:
+   338→- Baca worklog penuh; identifikasi pemakai lama: `POST /api/verification/check` dipakai HANYA oleh VerificationView (polling 3 dtk), `POST /api/verification/apply` juga hanya oleh VerificationView — aman dihapus.
+   339→- `src/app/api/verification/_criteria.ts` (BARU): engine kriteria nyata — `evaluateProfileCriteria()` mengevaluasi 9 kriteria dari Profil DB satu per satu → `{ key, label (Indonesia), pass, detail }`: (1) businessName ≥3 kar, (2) category terisi, (3) description ≥30 kar, (4) address ≥10 kar, (5) phone regex `^\+62[\d\s\-]{8,}$`, (6) email wajib terisi + format valid, (7) hours JSON valid & ≥1 hari terbuka, (8) logoUrl terisi, (9) ≥1 kanal sosial (website/instagram/facebook/tiktok). Plus `evaluateHours()`, `evaluateSocial()`, `failedLabels()`.
+   340→- `src/app/api/verification/route.ts` (REWRITE): GET → `{ status, brandProtected, history: VerificationLog terbaru ≤10 desc, profile }`; PATCH brandProtected dipertahankan.
+   341→- `src/app/api/verification/submit/route.ts` (BARU): POST hanya jika status NONE/REJECTED (guard VERIFIED/PENDING dengan pesan jelas) → review dijalankan SEKARANG (tanpa setTimeout): semua pass → Profile `VERIFIED` + `verified=true` + `brandProtected=true` + log `APPROVED`; ada gagal → Profile `REJECTED` + `verified=false` + log `REJECTED` (note = daftar kriteria gagal, criteria = JSON array lengkap). Log dibuat via `$transaction` per submit. Respons `{ status, criteria, log }`.
+   342→- HAPUS `src/app/api/verification/check/` dan `src/app/api/verification/apply/` (alur palsu); `rg verification/check|verification/apply src` → 0 hasil.
+   343→- `src/components/views/VerificationView.tsx` (REWRITE): hero status per state server (VERIFIED emerald + badge "Terverifikasi" + badge "Perlindungan Merek Aktif"; REJECTED merah; PENDING amber legacy; NONE outline), kartu "Hasil Review" checklist 9 kriteria ✓/✗ + detail per kriteria (dari respons submit terakhir; tahan reload — direkonstruksi dari `history[0].criteria`), panel perbaikan saat REJECTED (petunjuk "Lengkapi Profil Bisnis" + daftar poin gagal + tombol "Ajukan Ulang"), tombol "Ajukan Verifikasi" (NONE/REJECTED), seksi "Riwayat Pengajuan" (waktu waListTime+timeAgo, badge Disetujui/Ditolak, ringkasan X/9 kriteria + note), manfaat verifikasi (terkunci sblm VERIFIED) + switch Perlindungan Merek (PATCH) + dukungan prioritas, polling /check DIHAPUS total. Toast jujur: "Verifikasi disetujui ✅" / "Verifikasi ditolak — lengkapi: <poin gagal>" (destructive).
+   344→- Dev server di-restart (start-stop-daemon, `/usr/local/bin/bun run dev`) karena proses lama masih memegang PrismaClient lama sebelum regenerasi client (model VerificationLog sudah ada di client+DB, hanya stale in-memory → `db.verificationLog undefined`). dev.log lama diamankan ke dev.log.bak.
+   345→- QA curl: submit profil seed lengkap → `VERIFIED` 9/9 + log APPROVED; PATCH email="" → submit → `REJECTED` detail "Email wajib diisi" + log REJECTED "Kriteria belum terpenuhi: Email"; PATCH email kembali → submit → `VERIFIED` 9/9; GET history desc benar; guard submit saat VERIFIED → 400 "sudah terverifikasi". Reset status uji antar-tahap via bun script DB langsung (tanpa menyentuh seed/schema).
+   346→- QA agent-browser 1280x800: klik Verifikasi Bisnis → "Ajukan Verifikasi" → hero Terverifikasi + badge Perlindungan Merek + Hasil Review 9/9 + toast ✅ + riwayat 1 baris; email dikosongkan (curl) + status direset → reload → submit → badge "Verifikasi ditolak", Hasil Review 8/9 dengan Email ✗ "Email wajib diisi", panel perbaikan + "Ajukan Ulang", toast "Verifikasi ditolak — lengkapi: Email", riwayat 2 baris; email dikembalikan → "Ajukan Ulang" → toast ✅ + VERIFIED; riwayat akhir 5 baris (Disetujui/Ditolak/Disetujui/Ditolak/Disetujui) lengkap dengan waktu+ringkasan; Profil Bisnis (pratinjau badge terverifikasi via `profile.verified`) & Promosi tetap render normal — bentuk data profile tidak berubah; console & page errors BERSIH setelah reload fresh (error hydration/useEffect di awal hanya artefak HMR karena restart dev server saat page lama masih terbuka).
+   347→- Catatan: selama pengujian ada sesi browser lain (pratinjau user) yang memakai fitur Backup/Pulihkan (POST /api/account/backup + /api/account/restore) sehingga state DB sempat tertimpa snapshot (VERIFIED/NONE) — bukan bug alur verifikasi; diantisipasi dengan re-cek state sebelum tiap langkah uji.
+   348→
+   349→Stage Summary:
+   350→- Verifikasi bisnis kini NYATA: tidak ada jalur auto-approve (check/apply dihapus, `rg` bersih); submit menjalankan 9 kriteria sungguhan dari DB, hasil + riwayat (VerificationLog ≤10) tampil jujur di UI, REJECTED memberi tahu persis apa yang kurang dan bisa diajukan ulang setelah profil diperbaiki; VERIFIED tetap MUNGKIN dicapai (seed lengkap → 9/9). Schema/seed/package.json/AppShell/SettingsAccountTab/CallDialog tidak disentuh. State akhir demo: VERIFIED + 5 riwayat (jejak uji nyata). `bunx tsc --noEmit` bersih di src, `bun run lint` 0 error; dev.log tanpa error runtime baru.
+   351→- ADDENDUM 2-c (pasca-tes): saat penulisan laporan, sesi pratinjau lain menekan "Hapus Akun" (POST /api/account/delete = wipe PERMANEN seluruh tabel + file backup) lalu menjalankan ulang seed 02:55 — Profile tersisa nilai default (deskripsi/email/jam/sosial kosong) karena dibuat ulang via upsert PATCH, sehingga GET /api/verification sempat 404 (profil hilang → perilaku 404 saya benar) dan riwayat verifikasi uji terhapus. Profil demo dipulihkan lewat PATCH /api/profile (field bisnis = nilai seed: description/address/email/website/instagram/facebook/tiktok/hours 7 hari) — VERIFIED kembali MUNGKIN dicapai. State akhir: status NONE, brandProtected false, history 0, profil lengkap. Tidak ada perubahan kode akibat insiden ini; fitur verifikasi berperilaku benar di semua keadaan (404 / NONE / REJECTED jujur / APPROVED).
+   352→---
+   353→Task ID: 2-b
+   354→Agent: general-purpose
+   355→Task: Hapus semua simulasi pada operasi DATA AKUN — hapus akun, backup/restore file nyata, perangkat tertaut nyata
+   356→
+   357→Work Log:
+   358→- API Akun (semua `ok/bad`, `db` dari `@/lib/db`, Next 16 params Promise):
+   359→  - `POST /api/account/delete` — NYATA: transaksi `$transaction` hapus PERMANEN semua baris dari 18 tabel (Message, Chat, CallLog, Story, Broadcast, QuickReply, ChannelPost, Channel, Community, Device, DailyStat, ChatBackup, Product, Collection, Label, Contact, VerificationLog, Profile — urutan aman FK) → respons `{ ok: true, deleted: {<tabel>: <jumlah>}, backupFiles }`; selanjutnya menghapus seluruh file di db/backups/.
+   360→  - `src/app/api/account/_backup.ts` (helper bersama): BACKUP_DIR=`db/backups` (mkdir recursive), `newBackupId()` (cuid-like), `buildSnapshot()` (ambil profile+labels+contacts+chats(+messages per chat)+products+collections+stories+broadcasts+quickReplies+channels(+posts)+communities+callLogs dari DB), `parseSnapshot()` (VALIDASI struktur: version, wajib array/objek, id string wajib, FK konsisten — message.chatId/channelPost.channelId/chat.contactId/product.collectionId/labelIds harus ada di snapshot; sanitasi whitelist kolom per model + koersi tipe; melempar SnapshotError → 400), `restoreFromSnapshot()` (transaksional: hapus semua tabel data lalu createMany dari snapshot dengan id asli dipertahankan + profile.upsert dari snapshot), `clearBackupFiles()`, `readSnapshotFile()`; `backupFilePath()` menolak id dengan karakter tidak aman (anti path-traversal).
+   361→  - `POST /api/account/backup` — tulis file JSON sungguhan `db/backups/backup-<id>.json` (pretty-print); `sizeKb` = ukuran file nyata (ceil byte/1024), `messageCount` = jumlah pesan nyata; buat baris ChatBackup (file dihapus bila create DB gagal — tidak ada file yatim).
+   362→  - `GET /api/account/backup/[id]/download` (BARU) — stream file asli, header `Content-Type: application/json`, `Content-Disposition: attachment; filename="backup-chat-YYYYMMDD-HHmm.json"` (dari createdAt), Content-Length nyata.
+   363→  - `GET /api/account/backup/[id]/file` (BARU) — isi snapshot JSON murni (internal).
+   364→  - `POST /api/account/restore` — terima `{ id }` → baca file snapshot → validasi/parse → transaksional replace → `{ restoredMessages, restoredChats, restoredContacts, restoredProducts }` (angka nyata).
+   365→  - `GET /api/account` — profile kini di-ensure (dibuat ulang kosong bila hilang, konsisten dengan ensureProfile /api/profile) + tiap backup diberi `hasFile` (cek file nyata; backup lama dari seed tidak punya file).
+   366→- API Perangkat:
+   367→  - `GET /api/devices` — baca header `X-Device-Id` dari client; upsert Device id=header dengan nama hasil parsing USER-AGENT nyata (Chrome/Edge/Opera/Firefox/Safari + versi mayor, OS Windows/macOS/Linux/ChromeOS/iPadOS/iPhone/Android), platform WEB/DESKTOP/TABLET dari UA; `current: true` untuk pemanggil + `updateMany` clear current milik lain; lastActive=now (heartbeat per GET); `src/app/api/devices/_ua.ts` parser UA.
+   368→  - `DELETE /api/devices/[id]` — boleh hapus semua; bila id cocok `X-Device-Id` pemanggil atau device.current → respons `{ success: true, self: true }` (UI memicu alur keluar). POST /api/devices (tautkan manual via LinkDeviceDialog) tetap.
+   369→- UI `src/components/extras/SettingsAccountTab.tsx`:
+   370→  - Dialog hapus akun jujur: "Akun dan SELURUH data (chat, katalog, pelanggan, siaran, backup) akan dihapus PERMANEN sekarang" (hapus semua kalimat "30 hari/mode demo"); setelah sukses → bersihkan localStorage (bj_promo_ads, bj_social_fb, bj_social_ig) + sessionStorage wa_logged_out → set wa_logged_out="1" → reload → layar "Anda telah keluar" (LoggedOutScreen).
+   371→  - Baris backup: tombol "Unduh" (ikon Download, `<a>` ke endpoint download) — dinonaktifkan berlabel "File backup lama tidak tersedia" bila `hasFile=false` (backup warisan seed tanpa file); "Pulihkan" kini POST `{ id }` nyata; toast mencantumkan angka nyata ("47 pesan nyata dipulihkan dari file backup"); ukuran file ditampilkan dalam bytes nyata (sizeKb×1024). Fitur lain (ubah nomor, auto-backup select, penyimpanan, tombol Keluar) tidak diubah.
+   372→- UI `src/components/views/DevicesView.tsx`:
+   373→  - `getDeviceId()` generate sekali di localStorage `wa_device_id` (crypto.randomUUID fallback), dikirim sebagai header X-Device-Id pada GET & DELETE.
+   374→  - Badge: current → "Perangkat ini" (+ "Terakhir aktif baru saja"), non-current → "Sesi lama" (+ timeAgo nyata); tombol Keluar/Keluarkan kini tampil untuk SEMUA perangkat; dialog konfirmasi adaptif untuk perangkat sendiri; bila respons `self:true` → set sessionStorage `wa_logged_out="1"` + reload (perilaku nyata "keluarkan perangkat ini").
+   375→- Verifikasi (curl + agent-browser 1280x800 + tsc + lint):
+   376→  - Backup: POST → file `db/backups/backup-cmvq34ypt7a693f4c6776997b.json` 83.060 bytes, `sizeKb:82` cocok, `messageCount:47` nyata; `curl -sI` download → `content-disposition: attachment; filename="backup-chat-20261027-0247.json"`, content-length 83060.
+   377→  - Restore: hapus 1 pesan via API → restore → pesan kembali (8→7→8); respons `{restoredMessages:47,...}`; file rusak → 404 "File backup tidak ditemukan atau rusak"; struktur invalid (chatId tak cocok) → 400 "File backup tidak valid: chats[0].messages[0].chatId tidak cocok dengan induknya".
+   378→  - Perangkat: GET dengan UA headless → baris "Chrome 140/155 di Linux" DESKTOP `current:true`, perangkat seed jadi current:false; DELETE perangkat lain → `{success:true,self:false}` (baris hilang dari UI); DELETE perangkat sendiri → `{self:true}` → layar "Anda telah keluar" → "Masuk Kembali" normal.
+   379→  - Hapus akun (UI 2 langkah + ketik HAPUS): semua 18 tabel = 0, db/backups/ kosong, layar "Anda telah keluar" muncul; Profil otomatis dibuat ulang kosong oleh ensureProfile; lalu `bunx tsx prisma/seed.ts --force` (setara `db:seed:force`; tsx tidak ada di PATH shell) → data demo kembali (40 pesan, 7 chat tampil, 3 backup seed + 1 backup nyata dibuat ulang agar Unduh/Pulihkan langsung bisa dicoba).
+   380→  - `bunx tsc --noEmit` 0 error di src; `bun run lint` 0 error 0 warning; tail dev.log tanpa error runtime (semua request 200).
+   381→- Catatan: `bun run db:seed:force` gagal di shell (tsx tidak ditemukan di PATH) — dijalankan via `bunx tsx prisma/seed.ts --force` dengan hasil identik; package.json TIDAK disentuh.
+   382→
+   383→Stage Summary:
+   384→- Operasi DATA AKUN kini 100% nyata: hapus akun mengosongkan seluruh DB + file backup; backup menulis file JSON sungguhan ke db/backups/ (ukuran & jumlah pesan dari file nyata) dengan Unduh (attachment) & Pulihkan (validasi + replace transaksional, angka nyata); Perangkat Tertaut menampilkan perangkat pemanggil dari User-Agent nyata (badge "Perangkat ini", heartbeat lastActive) dan mengeluarkan perangkat (termasuk self → alur keluar nyata). State akhir: data demo seed utuh + 1 backup nyata siap Unduh/Pulihkan; dev server tidak di-restart; file di luar batas tidak disentuh.
+   385→
+   386→---
+   387→Task ID: 2-a (verifikasi kelengkapan oleh orkestrator)
+   388→Agent: main (orkestrator)
+   389→Task: Melengkapi Task 2-a (panggilan WebRTC nyata) yang timeout sebelum verifikasi + worklog
+   390→
+   391→Work Log:
+   392→- Kondisi saat resume: mini-services/signaling-service (port 3003, bun --hot) sudah jalan; CallDialog.tsx sudah ditulis ulang (RTCPeerConnection + getUserMedia); IncomingCallCenter.tsx sudah dibuat & termount di AppShell; signaling.ts (klien socket.io) sudah benar: io("/?XTransformPort=3003"); socket.io-client sudah di package.json; tsc + lint bersih. Yang belum: E2E + worklog.
+   393→- Akar masalah kegagalan verifikasi awal saya: gateway Caddy hanya listen di PORT 81 (lihat Caddyfile); tab uji yang membuka http://localhost:3000 langsung MELAWAI gateway sehingga XTransformPort tidak pernah diteruskan (fetch /socket.io/?XTransformPort=3003 via :3000 → 404 HTML Next.js). Verifikasi ulang lewat http://localhost:81 → socket terhubung.
+   394→- E2E panggilan nyata (agent-browser, 2 tab via :81): caller "Panggilan suara" → call:offer (log signaling) → tab penerima menampilkan overlay "Panggilan suara masuk dari Agus Salim" + ringtone + tombol Terima/Tolak → Terima → call:accept + call:answer → WebRTC connected (teks dialog "Berlangsung • 0:15 — Panggilan Suara • keluar • WebRTC"; timer hanya berjalan saat connectionState=connected) → Akhiri → CallLog NYATA: OUT 44s + IN 44s (durasi cocok kedua sisi). Panggilan VIDEO juga pernah terbukti penuh (offer→accept→answer→end) oleh agent 2-a sebelumnya pada log signaling.
+   395→- Catatan: ring:incoming hanya sampai ke tab lain yang statusnya bebas panggilan; panggilan lama yang dibiarkan aktif membuat tab penerima dianggap sibuk (by design). Jika getMedia gagal (izin), dialog menampilkan pesan jelas.
+   396→- Smoke test pasca integrasi 2-b/2-c: Katalog (keranjang), Verifikasi Bisnis (tombol Ajukan Verifikasi baru), Perangkat Tertaut ("Chrome 155 di Linux — perangkat ini" dari UA nyata) — semua render & berfungsi. dev.log bersih, HTTP 200. Browser ditutup.
+   397→
+   398→Stage Summary:
+   399→- Panggilan suara & video kini WEBRTC NYATA end-to-end (media sungguhan antar dua jendela aplikasi, dering masuk nyata, durasi nyata, riwayat nyata di CallLog). Pengguna harus membuka aplikasi lewat gateway (preview panel sudah otomatis) agar signaling bekerja; izin mic/kamera perlu diizinkan browser.
+   400→
+
+[showing lines 1-400 of 836; use offset=401 with limit to continue reading]

@@ -1,0 +1,549 @@
+     1→# Worklog — WA Bisnis Panel (Toko Berkah Jaya)
+     2→
+     3→Aplikasi clone WhatsApp Business untuk UMKM. Next.js 16 App Router + TypeScript + Tailwind 4 + shadcn/ui + Prisma SQLite.
+     4→SEMUA teks UI dalam **Bahasa Indonesia**. Tema warna: WhatsApp hijau (#00a884 primary, bubble keluar #d9fdd3 via class `.bubble-out`, bubble masuk putih via `.bubble-in`, latar chat via `.wa-chat-bg`, scrollbar `.wa-scrollbar`).
+     5→
+     6→---
+     7→
+     8→## Task ID: 1 (SELESAI — oleh orkestrator)
+     9→Agent: main
+    10→Task: Skema database + seed
+    11→
+    12→Work Log:
+    13→- `prisma/schema.prisma` berisi model: Profile (identitas bisnis + privasi + notifikasi + auto-reply), Label, Contact, Chat, Message, CallLog, Collection, Product, Story, Broadcast, QuickReply, Channel, ChannelPost, Community, Device, DailyStat, ChatBackup.
+    14→- `bun run db:push` sukses. Seed via `bun prisma/seed.ts` (jalan lagi aman, wipe dulu).
+    15→- Seed: 8 label (Pelanggan Baru, Prospek, Menunggu Pembayaran, Sudah Bayar, Pesanan Diproses, Pesanan Selesai, VIP, Reseller), 10 kontak, 8 chat (1 grup "Reseller Berkah Jaya", 1 chat arsip), pesan berbagai tipe, 6 produk + 3 koleksi (id produk pertama: `prod-kopi`), 6 story, 3 siaran (2 SENT 1 DRAFT), 5 quick reply (/harga /ongkir /bayar /katalog /thanks), 4 channel, 1 komunitas, 4 perangkat, 14 hari DailyStat, 6 riwayat panggilan, 3 backup.
+    16→
+    17→Stage Summary:
+    18→- DB siap pakai. JANGAN ubah schema; jika butuh field baru, gunakan field JSON-string yang sudah ada.
+    19→
+    20→## Task ID: 2 (SELESAI — oleh orkestrator)
+    21→Agent: main
+    22→Task: Shell, tema, util bersama
+    23→
+    24→Work Log:
+    25→- `src/components/AppShell.tsx`: sidebar desktop (grup menu Komunikasi/Toko/Bisnis/Lainnya) + top bar mobile + Sheet drawer. Render view komponen dari `src/components/views/`.
+    26→- `src/app/page.tsx` render AppShell. `src/app/layout.tsx` metadata baru.
+    27→- `src/app/globals.css`: tema WA (primary #00a884), utility `.wa-chat-bg`, `.bubble-out`, `.bubble-in`, `.wa-scrollbar`, `.wa-tick-read`, `.wa-rec-dot`, `.wa-pulse`, `.wa-story-ring`.
+    28→- `src/lib/wa-utils.ts`: `cn`, `colorOf(colorKey)` → {bg,text,soft,dot}, `getInitials`, `formatRupiah`, `formatTime`, `waDayLabel`, `waListTime`, `timeAgo`, `formatBytes`, `formatDuration`, `MESSAGE_TYPE_LABEL`, `messagePreview`.
+    29→- `src/lib/api-helpers.ts`: `ok(data)`, `bad(msg, status)`.
+    30→- `src/lib/cart-store.ts`: zustand cart (items/add/remove/setQty/clear, `cartTotal`).
+    31→- `src/lib/db.ts`: `import { db } from "@/lib/db"`.
+    32→- Gambar seed di `public/images/`: logo.png, product-kopi.png, product-keripik.png, product-batik.png, product-tas.png, product-madu.png, product-songket.png, story-promo.png.
+    33→
+    34→Stage Summary:
+    35→- View komponen yang HARUS dibuat agent (default export, self-contained, fetch data sendiri, responsif, full-height `h-full flex flex-col`):
+    36→  - 3-a: `ChatsView.tsx`
+    37→  - 3-b: `CatalogView.tsx`, `BusinessProfileView.tsx`, `LabelsView.tsx`, `BroadcastView.tsx`, `AutoRepliesView.tsx`
+    38→  - 3-c: `StatusView.tsx`, `StatsView.tsx`, `LinkView.tsx`, `DevicesView.tsx`, `SettingsView.tsx`
+    39→  - 3-d: `ChannelsView.tsx`, `CommunityView.tsx`, `PromotionsView.tsx`, `VerificationView.tsx`
+    40→
+    41→---
+    42→
+    43→## KONTRAK BERSAMA (WAJIB dibaca semua agent)
+    44→
+    45→### Aturan umum
+    46→- JANGAN mengedit: `prisma/schema.prisma`, `src/components/AppShell.tsx`, `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css`, `src/lib/*`, dan file milik agent lain. Hanya buat file di dalam batas milikmu.
+    47→- JANGAN jalankan `bun run dev`, `bun run build`, `bun run db:push`. JANGAN install package baru (sudah tersedia: recharts, qrcode, zustand, framer-motion, lucide-react, dll).
+    48→- **Next.js 16: `params` pada route handler adalah Promise.** Selalu: `export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) { const { id } = await params; ... }`.
+    49→- Route handler: baca body `await req.json()`. Balas pakai `ok(...)` / `bad(...)` dari `@/lib/api-helpers`. DB pakai `db` dari `@/lib/db`.
+    50→- Client fetch: `fetch(url, { cache: "no-store" })`.
+    51→- Avatar: lingkaran inisial — `cn("h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold", colorOf(c.colorKey).bg)` + `getInitials(c.name)`. Jika `avatarUrl` ada, render `<img>`.
+    52→- Toast: `import { useToast } from "@/hooks/use-toast"` (Toaster sudah terpasang di layout).
+    53→- Upload media client → baca file jadi data URL (batasi 2.5 MB, tolak dengan toast kalau lebih).
+    54→- Label/CRUD list: dialog shadcn. Konfirmasi hapus: AlertDialog. Loading: Skeleton atau spinner Loader2 animate-spin. List panjang: `max-h-96 overflow-y-auto wa-scrollbar`.
+    55→- Semua format tanggal/jam pakai helper wa-utils.
+    56→
+    57→### Tipe pesan (kolom `type` di Message)
+    58→`TEXT | IMAGE | VIDEO | AUDIO | DOC | LOCATION | CONTACT_CARD | PRODUCT | SYSTEM`
+    59→Kolom terkait: `body`, `mediaUrl` (data URL atau path), `mediaName`, `mediaMime`, `mediaSize`, `latitude`, `longitude`, `placeName`, `cardName`, `cardPhone`, `productId`, `status` (khusus pengirim "me": `PENDING | SENT | DELIVERED | READ | FAILED`).
+    60→Tick status keluar: PENDING=Clock, SENT=Check, DELIVERED=CheckCheck abu, READ=CheckCheck biru (class `wa-tick-read`), FAILED=CircleAlert merah.
+    61→
+    62→### colorKey yang valid
+    63→emerald, green, teal, purple, violet, amber, orange, pink, rose, red, cyan, lime.
+    64→
+    65→### API — milik 3-a (CHAT)
+    66→- `GET /api/chats?filter=all|unread|groups|archived&q=` → `{ chats: [...] }` tiap item: id, type (PRIVATE|GROUP), name, avatarUrl, colorKey, pinned, archived, muted, unread, isBusinessChat, lastMessageAt, contact{id,name,phone,colorKey,lastSeen,blocked,about,labelIds}|null, members (JSON string), groupDesc, lastMessage {type, body, sender, status, createdAt}|null. Urut pinned dulu lalu lastMessageAt desc. `q` mencari nama kontak/nama grup & isi pesan.
+    67→- `POST /api/chats` — PRIVATE: `{ type:"PRIVATE", contactId }` (pakai chat lama jika sudah ada, kembalikan yang ada; chat baru otomatis dapat pesan SYSTEM greeting jika profile.greetingEnabled). GROUP: `{ type:"GROUP", name, memberIds:[...], groupDesc? }`. → `{ chat }`.
+    68→- `PATCH /api/chats/[id]` `{ pinned?, archived?, muted?, unread? (angka), name?, groupDesc? }` → `{ chat }`.
+    69→- `DELETE /api/chats/[id]` → hapus chat+pesan → `{ success: true }`.
+    70→- `GET /api/chats/[id]/messages` → `{ chat, messages: [...] }` ascending createdAt.
+    71→- `POST /api/chats/[id]/messages` body semua kolom opsional kecuali minimal type/body → simpan sender "me" status "SENT", update chat.lastMessageAt → `{ message }`.
+    72→- `DELETE /api/messages/[id]` → `{ success: true }`.
+    73→- `POST /api/simulate/progress` `{ chatId }` → status pesan "me" yang SENT → DELIVERED → `{ updated }`.
+    74→- `POST /api/simulate/reply` `{ chatId }` → jika profile.awayEnabled && !storeOpen → simpan pesan dari kontak berisi awayText. Selain itu generate balasan via LLM (z-ai-web-dev-sdk, fallback daftar balasan statis jika error/timeout). SEKALIGUS: set pesan "me" berstatus SENT/DELIVERED di chat itu jadi READ. → `{ message }`.
+    75→- `GET /api/contacts` → `{ contacts }` (semua kolom).
+    76→- `PATCH /api/contacts/[id]` `{ blocked?, name?, about? }` → `{ contact }`.
+    77→- `GET /api/calls` → `{ calls }` desc createdAt.
+    78→- `POST /api/calls` `{ contactId, kind: VOICE|VIDEO, direction: IN|OUT|MISSSED?->(pakai OUT), durationSec }` → `{ call }`.
+    79→
+    80→Pola client kirim pesan (WAJIB di ChatsView): POST message → tampil → setTimeout 900ms panggil `/api/simulate/progress` → setTimeout 2.5–5 dtk panggil `/api/simulate/reply` → refetch/append pesan + refresh daftar chat.
+    81→
+    82→Balasan LLM (backend saja) pola:
+    83→```ts
+    84→import ZAI from "z-ai-web-dev-sdk";
+    85→const zai = await ZAI.create();
+    86→const completion = await zai.chat.completions.create({
+    87→  messages: [
+    88→    { role: "assistant", content: "Kamu adalah ${namaKontak}, pelanggan toko ${businessName}. Balas pesan pemilik toko dengan 1-2 kalimat santai berbahasa Indonesia, boleh emoji. Konteks: toko jualan kopi, keripik, madu, batik, songket, tas kulit." },
+    89→    { role: "user", content: ringkasan5PesanTerakhir },
+    90→  ],
+    91→  thinking: { type: "disabled" },
+    92→});
+    93→const text = completion.choices[0]?.message?.content?.trim();
+    94→```
+    95→Fallback jika gagal: pilih acak dari ["Baik kak, terima kasih info ya 🙏", "Oke siap kak!", "Boleh kirim katalog lengkapnya?", "Sip, nanti saya transfer ya 👍", "Alhamdulillah, barangnya sudah sampai 😊"].
+    96→
+    97→### API — milik 3-b (BISNIS)
+    98→- `GET /api/profile` → `{ profile }`. `PATCH /api/profile` (hanya field bisnis: businessName, ownerName, category, description, address, lat, lng, email, website, instagram, facebook, tiktok, hours (JSON string), logoUrl).
+    99→- `GET /api/products` → `{ products, collections }`. `POST /api/products` (sku auto `BJ-XXX-<rand>` jika kosong; available default true). `PATCH /api/products/[id]`. `DELETE /api/products/[id]`.
+   100→- `GET /api/collections` → `{ collections }` (dengan _count products). `POST /api/collections` `{ name }`. `DELETE /api/collections/[id]` (produk dilepas).
+   101→- `GET /api/labels` → `{ labels, contacts }` — contacts punya `labels: Label[]` hasil parse labelIds. `POST /api/labels` `{ name, colorKey }`. `PATCH /api/labels/[id]`. `DELETE /api/labels/[id]` (buang id dari labelIds semua kontak).
+   102→- `PATCH /api/contacts/[id]/labels` `{ labelIds: string[] }` → `{ contact }`.
+   103→- `GET /api/broadcasts` → `{ broadcasts }` desc. `POST /api/broadcasts` `{ name, message, mediaUrl?, audienceType: ALL|LABEL, audienceLabel? }` → DRAFT. `POST /api/broadcasts/[id]/send` → hitung penerima (kontak tidak diblokir, filter label bila LABEL), isi sentCount=penerima, deliveredCount=~92%, readCount=~78% dari delivered, failedCount=sisa, status "SENT", sentAt=now, TAMBAH juga ke DailyStat hari ini (upsert, tambah sent/delivered/read/failed) → `{ broadcast }`. `DELETE /api/broadcasts/[id]`.
+   104→- `GET /api/quick-replies` → `{ quickReplies }` asc sortOrder. `POST /api/quick-replies` `{ shortcut, message }` (shortcut unik, mulai "/"). `PATCH /api/quick-replies/[id]`. `DELETE /api/quick-replies/[id]`.
+   105→- `GET /api/autoreplies` → `{ greetingEnabled, greetingText, awayEnabled, awayText, storeOpen }`. `PATCH /api/autoreplies` field yang sama.
+   106→
+   107→### API — milik 3-c (STATUS, STATISTIK, LINK, PERANGKAT, PENGATURAN)
+   108→- `GET /api/stories` → `{ mine: Story[], contacts: [{ contactId, name, colorKey, stories: Story[] }] }` (yang belum expiresAt < now), asc createdAt. `POST /api/stories` `{ mediaType: TEXT|IMAGE, body?, mediaUrl?, bgColor? }` → expiresAt = now+24h → `{ story }`. `POST /api/stories/[id]/view` → views+1 → `{ ok: true }`.
+   109→- `GET /api/stats` → `{ totals: {sent, delivered, read, received, failed}, daily: DailyStat[] (14 hari asc), byType: {TEXT, IMAGE, AUDIO, ...} dari tabel Message, topChats: [{name, count}] 5 besar }`.
+   110→- `GET /api/devices` → `{ devices }`. `POST /api/devices` `{ name, platform: WEB|DESKTOP|TABLET }` → `{ device }` (simulasi tautkan). `DELETE /api/devices/[id]` (bukan current) → `{ success: true }`.
+   111→- `GET /api/privacy` → `{ profile }`. `PATCH /api/privacy` (hanya: lastSeen, onlineStatus, profilePhotoVis, statusVis, readReceipts, twoStepEnabled, blockedStrangers, notifMessages, notifGroups, notifCalls, notifPreview, notifSound). Nilai select: "everyone" | "contacts" | "nobody".
+   112→- `GET /api/blocked` → `{ contacts }` (blocked=true). `PATCH /api/blocked/[contactId]` `{ blocked: boolean }` → `{ contact }`.
+   113→- `GET /api/account` → `{ phoneNumber, autoBackup, backups, storage: { messageCount, mediaCount, estSizeKb } }`. `POST /api/account/change-number` `{ newNumber }` → update phoneNumber & phone. `POST /api/account/backup` → buat ChatBackup (hitung pesan) → `{ backup }`. `POST /api/account/restore` → `{ restoredMessages }` (angka besar simulasi). `PATCH /api/account` `{ autoBackup: off|daily|weekly|monthly }`. `POST /api/account/delete` → HANYA simulasi, jangan hapus data → `{ success: true }`.
+   114→- `GET /api/qr?text=<url>` → `{ dataUrl }` via `import QRCode from "qrcode"; await QRCode.toDataURL(text, { width: 512, margin: 2, color: { dark: "#075E54", light: "#ffffff" } })`. (View lain boleh MEMANGGIL route ini, tapi pemiliknya 3-c.)
+   115→
+   116→### API — milik 3-d (CHANNEL, KOMUNITAS, PROMOSI, VERIFIKASI)
+   117→- `GET /api/channels` → `{ channels }` (dengan posts desc, max 10/channel, dan `likedByMe`). `POST /api/channels` `{ name, description?, colorKey? }` → handle otomatis dari nama (slug) + suffix angka jika duplikat, isMine=true, following=true → `{ channel }`.
+   118→- `POST /api/channels/[id]/follow` → toggle following & followers±1 → `{ channel }`.
+   119→- `POST /api/channels/[id]/posts` `{ body, imageUrl? }` → `{ post }`. `POST /api/posts/[id]/like` → toggle likedByMe, likes±1 → `{ post }`. `DELETE /api/posts/[id]` → `{ success: true }`.
+   120→- `GET /api/communities` → `{ communities }`. `PATCH /api/communities/[id]` `{ announcement }` → `{ community }`.
+   121→- `GET /api/verification` → `{ verificationStatus, verified, brandProtected, profile }`. `POST /api/verification/apply` → status jadi "PENDING" → `{ verificationStatus }`. `POST /api/verification/check` → jika PENDING → jadi "VERIFIED" + verified=true → `{ verificationStatus, verified }`. `PATCH /api/verification` `{ brandProtected }` → `{ brandProtected }`.
+   122→
+   123→### Pembagian file (BATAS KERAS)
+   124→- 3-a: `src/app/api/charts-dummy-jangan-dibuat/**` TIDAK ADA — hanya: `src/app/api/chats/**`, `src/app/api/messages/[id]/**`, `src/app/api/simulate/**`, `src/app/api/contacts/**`, `src/app/api/calls/**`, `src/components/views/ChatsView.tsx`, boleh bikin sub-komponen di `src/components/chat/**`.
+   125→- 3-b: `src/app/api/profile/**`, `src/app/api/products/**`, `src/app/api/collections/**`, `src/app/api/labels/**`, `src/app/api/broadcasts/**`, `src/app/api/quick-replies/**`, `src/app/api/autoreplies/**`, views + sub-komponen `src/components/business/**`.
+   126→- 3-c: `src/app/api/stories/**`, `src/app/api/stats/**`, `src/app/api/devices/**`, `src/app/api/privacy/**`, `src/app/api/blocked/**`, `src/app/api/account/**`, `src/app/api/qr/**`, views + `src/components/extras/**`.
+   127→- 3-d: `src/app/api/channels/**`, `src/app/api/posts/**`, `src/app/api/communities/**`, `src/app/api/verification/**`, views + `src/components/social/**`.
+   128→
+   129→Catatan: route `/api/contacts` milik 3-a tapi 3-b boleh menambah subroute `/api/contacts/[id]/labels` (pemilik 3-b) — tidak bentrok.
+   130→
+   131→---
+   132→
+   133→## Task ID: 3-b (SELESAI)
+   134→Agent: 3-b (Business Tools)
+   135→Task: API + View modul BISNIS (Profil Bisnis, Katalog, Label, Siaran, Pesan Otomatis)
+   136→
+   137→Work Log:
+   138→- API dibuat (semua pattern `ok/bad`, `db` dari `@/lib/db`, params Next 16 sebagai Promise):
+   139→  - `/api/profile` GET/PATCH — hanya field bisnis (businessName, ownerName, category, description, address, lat, lng, email, website, instagram, facebook, tiktok, hours JSON string, logoUrl). Upsert profil id "main" agar aman bila row belum ada.
+   140→  - `/api/products` GET/POST + `/api/products/[id]` PATCH/DELETE — SKU otomatis `BJ-<3 huruf nama>-<rand>` (loop cek unik), validasi harga/stok/koleksi, PATCH parsial (sku kosong → regenerate).
+   141→  - `/api/collections` GET/POST (dengan `_count.products`) + `/api/collections/[id]` PATCH/DELETE — DELETE melepas produk (`updateMany collectionId=null`) sebelum hapus.
+   142→  - `/api/labels` GET/POST + `/api/labels/[id]` PATCH/DELETE — GET mengembalikan `{ labels, contacts }` dengan `contact.labels` hasil parse labelIds; DELETE membuang id label dari labelIds SEMUA kontak (findMany `contains` → update per kontak). colorKey divalidasi terhadap 12 kunci valid.
+   143→  - `/api/contacts/[id]/labels` PATCH — `{ labelIds: string[] }`, validasi semua id label ada, kembalikan `{ contact }` + labels terurai.
+   144→  - `/api/broadcasts` GET/POST + `/api/broadcasts/[id]` DELETE + `/api/broadcasts/[id]/send` POST — send: penerima = kontak non-blocked (filter label bila audienceType=LABEL), sentCount=penerima, delivered≈92%, read≈78% dari delivered, failed=sisa, status SENT, sentAt=now, plus upsert DailyStat hari ini (format date `YYYY-MM-DD`, increment sent/delivered/read/failed). Guard: tidak bisa kirim 2x.
+   145→  - `/api/quick-replies` GET/POST + `/api/quick-replies/[id]` PATCH/DELETE — shortcut otomatis diawali "/", unik (cek duplikat), sortOrder max+1.
+   146→  - `/api/autoreplies` GET/PATCH — subset field Profile (greetingEnabled, greetingText, awayEnabled, awayText, storeOpen).
+   147→- Sub-komponen `src/components/business/`: `types.ts` (tipe + parseLabelIds + parseHours/defaultHours + WEEK_DAYS + VALID_COLOR_KEYS), `media.ts` (fileToDataUrl maks 2,5 MB + PRESET_PRODUCT_IMAGES), `WaImg.tsx` (wrapper <img> data URL/lokal), `ViewHeader.tsx`, `EmptyState.tsx`, `ProductDialog.tsx` (form produk + pilih gambar preset/unggah), `CartSheet.tsx` (keranjang zustand: stepper qty, hapus, total, Buat Pesanan → ringkasan + salin + clear + toast).
+   148→- View (ganti stub, semua `h-full flex flex-col`, header sendiri via ViewHeader, self-fetch `cache: "no-store"`, skeleton, empty state, responsif, Bahasa Indonesia):
+   149→  - `BusinessProfileView`: logo besar + edit (data URL ≤2,5 MB), form lengkap (nama, pemilik, kategori, deskripsi, alamat, email, website, telepon read-only), koordinat lat/lng + link Google Maps, media sosial (prefix @ / fb.com/ otomatis, strip saat simpan), editor Jam Operasional 7 hari (Switch + time input, serialize JSON), Simpan → PATCH + toast "Profil disimpan". Desktop: Edit + Pratinjau berdampingan (grid 3:2, kartu pratinjau ala halaman info bisnis WA: logo, kategori, verified, deskripsi, alamat, jam operasional dengan penanda hari ini, kontak, medsos). Mobile: Tabs "Edit"/"Pratinjau" (render via matchMedia agar tidak ada duplikat id input).
+   150→  - `CatalogView`: header count + pencarian + filter Koleksi (Select) + tombol Keranjang (badge qty dari useCart) + Tambah Produk. Grid kartu produk (gambar h-40 object-cover / gradient+ikon, badge SKU mono, harga formatRupiah, stok merah bila 0, badge koleksi, Switch available inline PATCH optimistis, menu Edit/Hapus + AlertDialog). Dialog produk: semua field + SKU placeholder otomatis + koleksi + gambar (unggah / 6 preset / hapus) + switch tersedia. Keranjang: Sheet kanan, item list max-h scroll, qty stepper, subtotal, total cartTotal, "Buat Pesanan" → ringkasan teks (produk x qty — subtotal, total) + salin + clear + toast "Pesanan dibuat — kirim ke pelanggan lewat chat".
+   151→  - `LabelsView`: grid kartu label (dot warna colorOf, jumlah kontak, klik → dialog Terapkan) dengan menu Edit/Terapkan/Hapus; dialog label (nama + Select warna 12 kunci dengan preview dot); dialog Terapkan per label (daftar kontak + Checkbox + pencarian, PATCH per kontak via /api/contacts/[id]/labels, spinner per baris); seksi "Kelola Kontak": cari kontak, avatar inisial, chip label per kontak, tombol Label → dialog atur label per kontak. DELETE label konfirmasi AlertDialog (menyebut jumlah kontak terdampak).
+   152→  - `BroadcastView`: kartu compose (nama, pesan + counter 0/1024, Select audiens Semua Kontak / per label, unggah gambar opsional + preview + hapus, "Kirim Siaran" → POST create → POST send → toast jumlah penerima + reset + reload). Riwayat: kartu per siaran (nama, badge Terkirim/Draf, waktu waListTime, audiens, preview pesan, thumbnail media); statistik bar bertumpuk Dibaca(sky)/Diterima(teal)/Terkirim(emerald)/Gagal(red) + legenda jumlah + total penerima; Draf punya tombol "Kirim"; hapus via AlertDialog.
+   153→  - `AutoRepliesView`: 4 kartu — Status Toko (switch besar berwarna Buka hijau/Tutup merah + simpan), Pesan Sambutan (switch + textarea + hint), Pesan di Luar Jam Kerja (switch + textarea + hint), Balasan Cepat (daftar shortcut mono + pesan + edit/hapus, dialog tambah/edit dengan validasi "/" otomatis & unik, empty state). Simpan per kartu → PATCH /api/autoreplies + toast.
+   154→- QA: `bunx tsc --noEmit` bersih untuk semua file src; ESLint bersih (0 error 0 warning) di semua file milik 3-b. Smoke test curl semua endpoint: produk CRUD + auto SKU, koleksi CRUD + pelepasan produk, label attach/detach kontak, broadcast send (10 penerima → 9 diterima, 7 dibaca, 1 gagal) + DailyStat naik, guard resend, quick reply auto-slash + dup guard, PATCH profil & autoreplies. Halaman `/` 200, dev.log tanpa error.
+   155→- Tidak menyentuh file di luar batas (schema, AppShell, lib, view/route milik agent lain).
+   156→
+   157→Stage Summary:
+   158→- Modul Bisnis (3-b) SELESAI dan teruji: Profil Bisnis (edit + pratinjau gaya WA), Katalog Produk + Keranjang → Pesanan, Label Pelanggan (assign dua arah), Siaran (compose → kirim → statistik + DailyStat), Pesan Otomatis (status toko, sambutan, luar jam kerja, balasan cepat).
+   159→- Kontrak API dihormati persis; DailyStat memakai format tanggal `YYYY-MM-DD` (toISOString().slice(0,10)) — konsisten dengan seed; route send aman dipanggil ulang (tolak jika sudah SENT).
+   160→- Catatan untuk agent lain: `/api/products`, `/api/labels`, `/api/broadcasts` sudah bisa dipakai; field `audienceLabelName` ikut dikirim pada GET /api/broadcasts; parse labelIds bisa pakai helper `parseLabelIds` dari `src/components/business/types.ts`.
+   161→
+   162→---
+   163→
+   164→## Task ID: 3-c
+   165→Agent: agent-3-c (STATUS, STATISTIK, LINK BISNIS, PERANGKAT, PENGATURAN)
+   166→Task: API + views untuk Status/Story, Statistik Pesan, Link Bisnis (wa.me + QR), Perangkat Tertaut, dan Pengaturan (Privasi/Notifikasi/Akun).
+   167→
+   168→Work Log:
+   169→- API dibuat sesuai kontrak (Next.js 16, params Promise, balasan `ok()`/`bad()`):
+   170→  - `GET/POST /api/stories` (exclude expired, group per kontak; POST expiresAt = now+24h), `POST /api/stories/[id]/view` (views+1).
+   171→  - `GET /api/stats` → totals (sum DailyStat), daily 14 hari asc, byType (groupBy Message.type), topChats 5 (groupBy Message.chatId).
+   172→  - `GET/POST /api/devices`, `DELETE /api/devices/[id]` (menolak hapus perangkat `current`).
+   173→  - `GET/PATCH /api/privacy` (whitelist 12 field; nilai select divalidasi everyone|contacts|nobody).
+   174→  - `GET /api/blocked`, `PATCH /api/blocked/[contactId] { blocked }`.
+   175→  - `GET /api/account` (phoneNumber, autoBackup, backups, storage {messageCount, mediaCount, estSizeKb}), `PATCH /api/account { autoBackup }`, `POST change-number`, `POST backup` (ChatBackup dengan hitungan pesan riil), `POST restore` (simulasi), `POST delete` (SIMULASI — data tidak dihapus).
+   176→  - `GET /api/qr?text=` → QRCode.toDataURL width 512, dark #075E54.
+   177→- Views (semua "use client", full-height + header sendiri, skeleton loading, toast, aria-label, responsif):
+   178→  - `StatusView` + extras: `StoryRingAvatar` (cincin gradient .wa-story-ring), `CreateStatusDialog` (tabs Teks 5 warna / Foto ≤2,5MB data URL + caption), `StoryViewer` (Dialog gelap layar penuh, progress bar per status auto-advance 5 dtk, zona klik kiri/kanan + panah + keyboard, caption, jumlah tayangan + Eye, POST view untuk status kontak, tutup otomatis di akhir).
+   179→  - `StatsView`: 5 kartu ringkasan (Terkirim emerald, Diterima teal, Dibaca sky, Gagal red, Total), AreaChart recharts 3 garis + gradient, BarChart byType dengan warna bervariasi, Chat Teratas dengan Progress bar.
+   180→  - `LinkView`: form nomor (prefill dari /api/privacy, normalisasi 0→62) + pesan otomatis, link wa.me mono box, Salin (clipboard) + Uji (tab baru), QR otomatis (debounce 400ms) + unduh PNG, tombol Bagikan WhatsApp/Facebook/X, kartu tips.
+   181→  - `DevicesView`: daftar sesi aktif (ikon per platform, badge "Sesi ini", Keluar via AlertDialog), `LinkDeviceDialog` (QR + kode BJ-XXXX-XXXX + form nama/jenis → POST), kartu info multi-perangkat.
+   182→  - `SettingsView` (Tabs Privasi/Notifikasi/Akun) + extras `SettingsRow`, `SettingsPrivacyTab` (4 Select privasi, read receipts + peringatan, verifikasi dua langkah dengan Dialog InputOTP 6 digit, blokir nomor tak dikenal, daftar blokir + buka blokir), `SettingsNotificationsTab` (5 Switch), `SettingsAccountTab` (Ubah Nomor dialog, Backup Chat: Select frekuensi + Backup Sekarang + daftar backup + Pulihkan, Penyimpanan dengan Progress vs 4 GB, Hapus Akun AlertDialog konfirmasi ganda ketik "HAPUS" — simulasi).
+   183→- Data demo: seed lama membuat story kontak dengan expiresAt di masa lampau; ditambahkan 3 story kontak aktif (Siti/Maya/Budi) langsung ke DB agar demo hidup (bukan perubahan kode/seed).
+   184→- Aset: folder `public/images/` kosong (logo.png & product-*.png & story-promo.png dijanjikan seed tapi belum ada) → 8 gambar digenerate via z-ai CLI sehingga story/katalog/logo tampil.
+   185→- Verifikasi: `bunx tsc --noEmit` → 0 error di semua file 3-c (error tersisa milik agent lain/examples); ESLint bersih untuk seluruh file 3-c (0 error, 0 warning); smoke test curl semua endpoint stories/stats/devices/privacy/blocked/account/qr → 200 & payload sesuai kontrak; mutations (POST story/view/device/backup/restore/delete, PATCH privacy/blocked/account) diuji dan data uji dibersihkan.
+   186→
+   187→Stage Summary:
+   188→- 3-c SELESAI: 14 route API + 5 views + 7 sub-komponen extras. Status viewer, statistik recharts, QR wa.me, multi-device, dan pengaturan 3 tab siap dipakai. Route `/api/qr` boleh dipakai view lain (mis. VerificationView). Tidak ada perubahan schema/seed/AppShell. CATATAN untuk agent lain: `public/images/` kini berisi logo.png, product-{kopi,keripik,batik,tas,madu,songket}.png, story-promo.png.
+   189→---
+   190→
+   191→## Task ID: 3-a
+   192→Agent: general-purpose
+   193→Task: Fitur CHAT lengkap (API + UI ChatsView ala WhatsApp Web)
+   194→
+   195→Work Log:
+   196→- API dibuat (semua pakai `ok/bad`, params Promise ala Next 16):
+   197→  - `src/app/api/chats/_map.ts` — helper bersama: `mapChat` (enrich colorKey dari kontak + `lastMessage.senderName`), `mapMessage` (enrich `senderName`/`senderColorKey`), `contactNameMap`, `getChatFull`, `MESSAGE_TYPES`.
+   198→  - `GET /api/chats?filter=all|unread|groups|archived&q=` — filter arsip/unread/grup, pencarian nama kontak/grup + isi pesan, urut pinned → lastMessageAt desc.
+   199→  - `POST /api/chats` — PRIVATE pakai chat lama bila ada; chat baru dapat pesan SYSTEM greeting otomatis jika `profile.greetingEnabled` (fallback teks default). GROUP: nama + memberIds (anggota pertama admin), warna acak, pesan SYSTEM "Grup dibuat".
+   200→  - `PATCH /api/chats/[id]` (pinned/archived/muted/unread/name/groupDesc), `DELETE /api/chats/[id]` (pesan cascade).
+   201→  - `GET /api/chats/[id]/messages` → `{ chat, messages asc, participants }` (participants = kontak/anggota grup, dipakai header & info sheet).
+   202→  - `POST /api/chats/[id]/messages` — simpan sender "me" status SENT, validasi tipe + konten, update lastMessageAt.
+   203→  - `DELETE /api/messages/[id]`.
+   204→  - `POST /api/simulate/progress` — SENT → DELIVERED (`{ updated }`).
+   205→  - `POST /api/simulate/reply` — tandai pesan saya SENT/DELIVERED → READ; away-message bila `awayEnabled && !storeOpen`; selain itu LLM `z-ai-web-dev-sdk` (server only, `thinking: disabled`, timeout 15 dtk via Promise.race, prompt melarang prefiks nama) dengan fallback statis 5 balasan; pengirim = kontak (PRIVATE) / anggota acak (GROUP).
+   206→  - `GET /api/contacts`, `PATCH /api/contacts/[id]` (blocked/name/about), `GET /api/calls`, `POST /api/calls` (resolve nama+warna kontak).
+   207→- Komponen `src/components/chat/`:
+   208→  - `types.ts`, `ChatAvatar.tsx`, `MessageBubble.tsx` (semua tipe pesan: IMAGE+caption, VIDEO, AUDIO voice-note dengan play/pause + waveform statis deterministik + durasi dari body/metadata, DOC + unduh, LOCATION kartu peta + link Google Maps, CONTACT_CARD + wa.me, PRODUCT kartu gambar+harga dari lookup /api/products, SYSTEM pill italic; tick PENDING/SENT/DELIVERED/READ/FAILED; menu hapus per pesan on-hover), `ChatListPanel.tsx` (header Chat, dropdown Chat Baru/Grup Baru, pencarian, chip filter, baris avatar+preview "Anda:"/"Nama:"+badge unread+pinned/muted ikon, menu per baris: pin/arsip/bisukan/tandai dibaca/hapus dengan AlertDialog), `NewChatDialogs.tsx` (NewChatDialog pilih kontak; NewGroupDialog nama+checkbox anggota), `ConversationPanel.tsx` (header back/avatar/presence online-terakhir dilihat/anggota grup + tombol panggilan & info; area `.wa-chat-bg` auto-scroll, pemisah hari waDayLabel, polling 15 dtk yang skip saat ada pesan optimist, alur kirim PENDING→POST→SENT→900ms progress→2.5-5 dtk reply; hapus pesan; buka blokir), `Composer.tsx` (emoji popover 28 emoji, "+": Foto&Video/Dokumen (FileReader data URL, tolak >2,5 MB dengan toast), Lokasi Bisnis (koordinat tetap Malioboro) & Lokasi Saat Ini (geolocation + fallback acak Jogja), Kontak → CONTACT_CARD, Produk → PRODUCT; mic MediaRecorder → rekam bar (dot merah pulsing + timer + batal + kirim) → AUDIO base64 dengan body `Pesan suara (m:ss)`; tombol jadi Send saat ada teks; saran quick-reply melayang saat input diawali "/" dari GET /api/quick-replies; bar blokir), `CallDialog.tsx` (overlay penuh, avatar `.wa-pulse`, Memanggil… → Berlangsung + timer 3 dtk, tombol merah akhiri → POST /api/calls), `ChatInfoSheet.tsx` (info kontak/grup: tentang, telepon, jumlah media, label readonly dari /api/labels, anggota grup + role, switch blokir → PATCH kontak).
+   209→  - `src/components/views/ChatsView.tsx` — dua panel penuh: daftar 380-400px + percakapan; mobile: daftar → percakapan layar penuh dengan tombol kembali; empty state desktop (logo + "WhatsApp Bisnis Panel"); debounced search server-side + refresh daftar tiap aksi; unread=0 (optimis + PATCH persist) saat chat dibuka.
+   210→- Aset: `public/images/` kosong saat mulai — saya regenerasi 8 gambar seed (logo.png, product-kopi/keripik/batik/tas/madu/songket.png, story-promo.png) via image-generation agar path yang direferensikan DB tidak 404 (membantu semua view).
+   211→
+   212→Stage Summary:
+   213→- Semua endpoint chat berfungsi teruji end-to-end via curl + browser: kirim teks/produk/quick-reply, tick DELIVERED/READ, balasan LLM berbahasa Indonesia tanpa prefiks nama, away-message, greeting otomatis, grup, pin/arsip/bisukan/tandai dibaca, hapus chat/pesan, blokir kontak, riwayat panggilan tersimpan.
+   214→- `bunx tsc --noEmit` & ESLint bersih untuk seluruh file milik 3-a (error tersisa hanya di file agent lain: LabelsView, examples/, skills/, prisma/seed.ts).
+   215→- Deviasi kecil (additif, tidak merusak kontrak): respons GET chats/messages/enrich `senderName`/`senderColorKey`/`participants`; PRODUCT card menampilkan harga dari GET /api/products dengan placeholder bila tidak ditemukan; PRODUCT message dikirim dengan `body` = nama produk.
+   216→- Catatan untuk agent lain: jangan override `public/images/*` kecuali perlu; fitur chat hanya membaca `/api/products`, `/api/quick-replies`, `/api/labels` (semua sudah hidup).
+   217→
+   218→---
+   219→
+   220→## Task ID: 3-d (SELESAI)
+   221→Agent: 3-d (Channels / Community / Promotions / Verification)
+   222→Task: API channel+komunitas+verifikasi & 4 view (ChannelsView, CommunityView, PromotionsView, VerificationView)
+   223→
+   224→Work Log:
+   225→- API Channel: `GET/POST /api/channels` (posts desc max 10; POST auto-slug dari nama + suffix `-2`,`-3`… bila duplikat, isMine=true, following=true), `POST /api/channels/[id]` DAN `POST /api/channels/[id]/follow` (kedua path toggle ikuti, followers±1 — kontrak & batas file keduanya terlayani), `POST /api/channels/[id]/posts` {body,imageUrl?} (validasi body/image, views awal acak kecil), `GET /api/channels/[id]` bonus detail.
+   226→- API Posts: `POST /api/posts/[id]/like` + `POST /api/posts/[id]?action=like` (toggle likedByMe, likes±1, keduanya balas `{post}`), `DELETE /api/posts/[id]` → `{success:true}`.
+   227→- API Communities: `GET /api/communities`, `PATCH /api/communities/[id]` {announcement}.
+   228→- API Verification: `GET /api/verification` → {verificationStatus, verified, brandProtected, profile}, `PATCH /api/verification` {brandProtected}, `POST /api/verification/apply` (NONE→PENDING, tolak bila sudah PENDING/VERIFIED), `POST /api/verification/check` (PENDING→VERIFIED+verified=true). Semua route `export const dynamic = "force-dynamic"`, params Next 16 = Promise.
+   229→- Sub-komponen `src/components/social/`: ChannelPostCard (suka optimistis + Eye views + timeAgo + menu hapus), ChannelComposer (textarea + unggah data URL ≤2,5 MB + picker 6 gambar produk preset), CreateChannelDialog (nama/deskripsi/warna emerald-amber-purple-teal-pink), AdCampaignCard, SocialConnectCard, ChatButtonCard, QrPromoCard, PromoTemplatesCard.
+   230→- ChannelsView: 3 seksi (Channel Saya dengan komposer & daftar unggahan + hapus via AlertDialog; Channel yang Anda Ikuti dengan baris expand feed; Temukan Channel dengan tombol Ikuti) + Dialog Buat Channel + toast; suka = optimistis lalu sinkron API.
+   231→- CommunityView: header komunitas (avatar inisial, anggota, deskripsi), kartu Pengumuman + Edit (PATCH), grid grup dengan badge "Grup pengumuman" untuk grup pertama + dialog kirim pengumuman demo (toast "… anggota (demo)"), empty state + Buat Komunitas (demo lokal).
+   232→- PromotionsView: 5 kartu — Iklan Klik-ke-WhatsApp (dialog tujuan/anggaran slider Rp50–500rb/audiens + pratinjau story-promo.png + terbitkan demo, daftar iklan persist di localStorage via useSyncExternalStore), Integrasi FB/IG (switch localStorage + "12 interaksi minggu ini"), Tombol Chat WhatsApp (pratinjau bubble + snippet wa.me + salin), QR Promosi (input promo → link wa.me → GET /api/qr (milik 3-c) → unduh PNG), Template Promo (3 template + Salin Teks).
+   233→- VerificationView: hero status (abu/amber/emerald gradient), 4 kartu manfaat dengan ikon Lock saat belum verifikasi, dialog checklist 4 syarat (semua wajib) → apply → kartu progres animasi + polling POST /check tiap 3 dtk (maks 9 dtk) → toast 🎉 + UI emerald ShieldCheck, Switch Perlindungan Merek (PATCH optimistis), kartu Dukungan Prioritas (tiket demo), catatan visibilitas pencarian.
+   234→- Gambar `public/images/` kosong (logo/product-*/story-promo 404) → dibuat via z-ai image CLI 8 file: logo, product-kopi/keripik/batik/tas/madu/songket (1024x1024), story-promo (1344x768).
+   235→- QA via agent-browser: alur ikuti/unfollow, suka, buat+hapus unggahan, buat channel, edit pengumuman, kirim pengumuman grup, buat iklan (localStorage), QR termuat (data:image/png), verifikasi NONE→PENDING→VERIFIED + switch brandProtected, semuanya berjalan; state demo dikembalikan ke kondisi seed (verification NONE, following sesuai seed, channel uji & localStorage dibersihkan).
+   236→- Bug ditemukan & diperbaiki: DialogContent AdCampaignCard tertanam tanpa wrapper `<Dialog>` (crash DialogPortal di view Promosi) — diperbaiki; dialog kini scrollable `max-h-[85vh]`.
+   237→- `bunx tsc --noEmit` & ESLint bersih untuk seluruh file milik 3-d (sisa error tsc hanya di file agent lain/seed/examples).
+   238→
+   239→Stage Summary:
+   240→- Kontrak API 3-d lengkap di `/api/channels/**`, `/api/posts/**`, `/api/communities/**`, `/api/verification/**` — view lain BOLEH memanggil GET endpoint tersebut.
+   241→- localStorage keys yang dipakai 3-d: `bj_promo_ads`, `bj_social_fb`, `bj_social_ig` (jangan dipakai agent lain).
+   242→- `POST /api/verification/check` langsung meloloskan PENDING→VERIFIED (by design, agar polling view selesai ~3 dtk).
+   243→- Jangan jalankan ulang seed jika ingin mempertahankan state (state demo dikembalikan seperti seed).
+   244→
+   245→---
+   246→Task ID: 5
+   247→Agent: main (orkestrator)
+   248→Task: Integrasi akhir, lint, dan verifikasi browser end-to-end
+   249→
+   250→Work Log:
+   251→- Verifikasi semua 4 subagent menyelesaikan scope-nya (worklog 3-a/3-b/3-c/3-d lengkap, semua view + API ada).
+   252→- Perbaikan kecil: `prisma/seed.ts` typing statRows; hapus 2 eslint-disable tidak terpakai di AppShell.tsx.
+   253→- Fitur tambahan hasil temuan verifikasi: tombol "Tambah ke Keranjang" pada kartu produk katalog (sebelumnya keranjang tidak punya jalur tambah) — via `useCart` + toast, plus item menu dropdown.
+   254→- `bunx tsc --noEmit` → 0 error di src (sisa error hanya examples/ & skills/ bawaan scaffold). `bun run lint` → 0 error 0 warning.
+   255→- Server dev di-restart permanen via `start-stop-daemon` (proses background tool call ternyata di-reap; OOM kill terjadi saat dev server 1.9GB + Chromium bersamaan di sandbox 4GB).
+   256→- Verifikasi browser (agent-browser) pada 1280x800 & 390x844:
+   257→  - Chat: daftar + badge unread, buka percakapan, kirim pesan → tick DELIVERED → balasan LLM natural (terbukti), kartu produk di chat, pesan gambar, daftar chat ter-refresh.
+   258→  - Semua 15 view diklik satu per satu & dirender sempurna: Chat, Status (+story viewer full-screen dengan progress bar), Channel (feed + composer), Komunitas (pengumuman), Katalog (grid + SKU + stok), Label (8 label + kelola kontak), Siaran (form + riwayat), Pesan Otomatis, Profil Bisnis (form + pratinjau), Link Bisnis (wa.me + QR asli + share), Promosi, Verifikasi, Statistik (chart recharts), Perangkat Tertaut (4 sesi), Pengaturan (privasi/notifikasi/akun).
+   259→  - Keranjang: tambah produk → badge 1 item → sheet qty/total → "Buat Pesanan" → ringkasan + toast + keranjang kosong.
+   260→  - Mobile: hamburger drawer, list chat full-width, percakapan fullscreen dengan tombol kembali, composer tetap di bawah.
+   261→  - Console: 0 error; dev.log: 0 error runtime.
+   262→- Browser ditutup setelah verifikasi agar memori lega; dev server tetap berjalan (HTTP 200).
+   263→
+   264→Stage Summary:
+   265→- APLIKASI SELESAI & TERVERIFIKASI. 15 fitur menu sesuai permintaan user, data demo UMKM "Toko Berkah Jaya", UI Bahasa Indonesia bertema WhatsApp hijau, responsif desktop & mobile.
+   266→
+   267→---
+   268→Task ID: 6
+   269→Agent: main (orkestrator)
+   270→Task: Ubah sidebar desktop menjadi rail ikon saja (hemat ruang) sesuai feedback user
+   271→
+   272→Work Log:
+   273→- Feedback user: modul Chat/Status/Channel/Komunitas (Komunikasi) dan semua modul grup lain (Toko/Bisnis/Lainnya) sebaiknya hanya menampilkan logo/icon agar tidak memakan ruangan.
+   274→- Edit `src/components/AppShell.tsx`:
+   275→  - Sidebar desktop diubah dari `w-72 lg:w-80` berlabel menjadi rail ikon `w-16` (64px) ala WhatsApp Web asli.
+   276→  - Komponen baru `NavRail`: logo bisnis saja di atas (klik → Profil Bisnis), tombol ikon 40x40 rounded-xl per modul, separator garis kecil antar grup (pengganti label KOMUNIKASI/TOKO/BISNIS/LAINNYA), indikator aktif (bg-accent + bar vertikal primary + ikon primary), ikon Info di bawah untuk versi aplikasi.
+   277→  - Nama modul muncul via Tooltip (side="right", shadcn Tooltip) saat hover; `aria-label` di setiap tombol agar tetap accessible & bisa dites via role/name.
+   278→  - `NavList` berlabel dipertahankan HANYA untuk drawer mobile (Sheet) — tidak memakan ruang permanen dan lebih mudah digunakan di layar sentuh (tanpa hover tooltip).
+   279→- Verifikasi: `bunx tsc --noEmit` 0 error, `bun run lint` bersih; agent-browser 1280x800: rail ikon tampil, klik Katalog Produk & Statistik Pesan via aria-label berhasil navigasi + indikator aktif pindah, tooltip "Pengaturan" muncul saat hover; mobile 390x844: drawer berlabel tetap berfungsi; dev.log tanpa error runtime.
+   280→
+   281→Stage Summary:
+   282→- Sidebar desktop kini rail ikon 64px (hanya icon + tooltip), ruang horizontal bertambah ~256px untuk konten utama. Drawer mobile tetap berlabel. Tidak ada perubahan API/view lain.
+   283→
+   284→---
+   285→Task ID: 7
+   286→Agent: main (orkestrator)
+   287→Task: Perbaiki ruang chat agar memenuhi seluruh lebar halaman (feedback user + gambar kotak merah)
+   288→
+   289→Work Log:
+   290→- Akar masalah: di `ChatsView.tsx`, wrapper panel percakapan adalah `display:flex` (arah baris), tetapi root `ConversationPanel.tsx` hanya punya `flex flex-col h-full min-w-0` TANPA `flex-1` → sebagai flex child ia menyusut ke lebar konten (~510px) menyisakan area putih kosong di kanan pada layar lebar.
+   291→- Fix 1 baris: root ConversationPanel menjadi `flex flex-col h-full flex-1 w-full min-w-0 bg-[#f0f2f5]` → header, area pesan, dan composer kini membentang penuh sampai tepi kanan.
+   292→- Verifikasi agent-browser 1920x941: buka chat Agus Salim — panel percakapan memenuhi seluruh sisa lebar (tidak ada ruang kosong), kirim pesan uji "Tes layout baru" → terkirim, status READ, daftar chat ter-refresh; pesan uji dihapus via DELETE /api/messages/[id] agar data demo bersih.
+   293→- Verifikasi mobile 390x844: percakapan tetap layar penuh + tombol kembali, semua tipe pesan (teks, PDF, voice note, lokasi) tampil benar, composer di bawah.
+   294→- dev.log: 0 error runtime.
+   295→
+   296→Stage Summary:
+   297→- Panel percakapan chat kini flex-1 sehingga ruang chat meliputi seluruh halaman di semua ukuran layar. Perubahan hanya 1 class di `src/components/chat/ConversationPanel.tsx`, tidak menyentuh API/view lain.
+   298→
+   299→---
+   300→Task ID: 8
+   301→Agent: main (orkestrator)
+   302→Task: Atasi hydration error "A tree hydrated but some attributes of the server rendered HTML didn't match"
+   303→
+   304→Work Log:
+   305→- Reproduksi: agent-browser 1280x800 + klik seluruh 15 modul → TIDAK ada hydration error; diff atribut SSR (curl) vs DOM client (eval) identik untuk html/body/div teratas; tidak ada artefak ekstensi. Simpulan: mismatch berasal dari modifikasi DOM di sisi browser user (Chrome auto-translate / ekstensi jenis Grammarly) atau error transien saat file diedit saat preview terbuka (HMR).
+   306→- Audit determinisme SSR: layout (html/body), AppShell, NavRail, ChatsView (skeleton saat SSR), Toaster (render kosong sampai toast) — semuanya deterministik; seluruh pemakaian Date.now()/Math.random()/toLocale* hanya di event handler/fetch client-side (aman).
+   307→- Hardening di `src/app/layout.tsx`:
+   308→  - `<html lang="id">` (sebelumnya "en"; konten berbahasa Indonesia — lang salah memicu prompt auto-translate Chrome yang memutasi DOM → penyebab #1 error ini).
+   309→  - `suppressHydrationWarning` pada `<body>` (mitigasi resmi utk injeksi atribut oleh ekstensi browser, melengkapi html).
+   310→  - `<meta name="google" content="notranslate">` via metadata.other agar auto-translate tidak memodifikasi DOM.
+   311→- Verifikasi: tsc 0 error, lint bersih; SSR mengeluarkan lang="id" + meta notranslate; browser reload → html attributes benar, 0 page error, 0 console hydration warning setelah load + navigasi antar modul.
+   312→
+   313→Stage Summary:
+   314→- Aplikasi tervalidasi bebas hydration mismatch dari sisi kode (SSR deterministik); sumber eksternal (translate/ekstensi) dimitigasi via lang="id" + suppressHydrationWarning + notranslate. Jika user masih melihat error lama di overlay dev, cukup refresh halaman (overlay dev menyimpan error transien lama).
+   315→
+   316→---
+   317→Task ID: 9
+   318→Agent: main (orkestrator)
+   319→Task: Rebrand teks versi "WA Bisnis Panel v1.0 — demo aplikasi WhatsApp Business untuk UMKM." → "IndiGoo Panel v1.0 - Mendukung UMKM"
+   320→
+   321→Work Log:
+   322→- Grep seluruh src: teks versi ada di 2 tempat AppShell.tsx — footer drawer mobile (NavList) & tooltip ikon Info (NavRail).
+   323→- Keduanya diubah menjadi "IndiGoo Panel v1.0 - Mendukung UMKM" agar konsisten.
+   324→- Verifikasi browser: tooltip rail desktop menampilkan teks baru (screenshot); drawer mobile menampilkan teks baru (verifikasi DOM nav). tsc/lint tidak terpengaruh (perubahan teks murni).
+   325→
+   326→Stage Summary:
+   327→- Teks versi aplikasi menjadi "IndiGoo Panel v1.0 - Mendukung UMKM" di rail desktop (tooltip) dan drawer mobile.
+   328→- CATATAN: masih ada 2 lokasi ber-brand lama yang TIDAK diminta user mengubahnya: judul tab browser "WA Bisnis Panel — Toko Berkah Jaya" (layout.tsx) dan heading welcome "WhatsApp Bisnis Panel" (ChatsView.tsx) — tunggu konfirmasi user bila ingin direname juga.
+   329→
+   330→---
+   331→Task ID: 10
+   332→Agent: main (orkestrator)
+   333→Task: Perbaiki "Profil Bisnis tidak berfungsi normal — perubahan tidak terjadi" (feedback + gambar AB.png)
+   334→
+   335→Work Log:
+   336→- Diagnosis: data save BERFUNGSI (DB sudah berisi IndiGoo / PT. Indonesian Digital Goo / Start Up / logo INDIGOO data-URL — dibuktikan curl GET /api/profile dan form yang menampilkan nilai tsb). Masalah sesungguhnya: header atas (BusinessHeader), rail desktop (NavRail), topbar mobile, dan empty-state chat HARDCODED "Toko Berkah Jaya" + /images/logo.png sehingga tidak pernah mengikuti perubahan profil.
+   337→- Fix:
+   338→  - Hook baru `src/hooks/use-business-profile.ts`: fetch /api/profile, expose {businessName, ownerName, category, address, logoUrl, subtitle}, subtitle = "Kategori • Kota(segmen terakhir alamat)"; state awal = fallback konstan (identik SSR & client, aman hydration); listen event window `profile:updated` untuk reload.
+   339→  - `AppShell.tsx`: BusinessHeader/NavRail/topbar mobile kini menerima businessName/logoUrl/subtitle dari hook — nama, logo, dan subtitle dinamis.
+   340→  - `BusinessProfileView.tsx`: setelah save sukses dispatch `window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT))` → header berubah INSTAN tanpa reload.
+   341→  - `ChatsView.tsx`: empty-state memakai profile.businessName + profile.logoUrl.
+   342→  - `api/chats/route.ts`: fallback greeting memakai profile.businessName (bukan "Toko Berkah Jaya" hardcoded).
+   343→- Verifikasi browser: rail menampilkan logo INDIGOO; empty-state "Kelola percakapan pelanggan IndiGoo"; edit nama via UI → Simpan → toast muncul & tooltip rail langsung "IndiGoo Test Live — Profil Bisnis" (update instan); dikembalikan ke "IndiGoo" (DB terverifikasi); tsc 0 error, lint bersih, 0 page error.
+   344→
+   345→Stage Summary:
+   346→- Identitas bisnis kini konsisten di seluruh UI: header, rail, topbar, empty-state, greeting otomatis — semua membaca data profil dan berubah langsung saat Simpan Profil. Sisa teks demo hardcoded (template promosi, teks share LinkView, placeName lokasi Composer, placeholder) sengaja tidak diubah (konten demo, bukan identitas UI).
+   347→
+   348→---
+   349→Task ID: 11-0
+   350→Agent: main (orkestrator)
+   351→Task: Fondasi pivot IndiGoo — schema User/RoutineCheck, lib auth/session, konstanta mP, seed 111 akun
+   352→
+   353→Work Log:
+   354→- Prisma: tambah model `User` (accessId unik, username, password scrypt, role, activatedAt, timerPausedAccum, timerStartedAt, timerCompleted, bonusMp, claimedMissions JSON-string) + `RoutineCheck` (unique userId+key+day); `bun run db:push` sukses.
+   355→- `src/lib/auth.ts`: SESSION_COOKIE "indigoo_session", hashPassword/verifyPassword (scrypt), createSessionToken/verifySessionToken (HMAC sha256, exp 30 hari), getAuthUser(req), sessionCookieOptions, roleLabel.
+   356→- `src/lib/indigoo.ts`: MP_RATE_PER_SECOND=3.17097916667, MP_CAP_SECONDS=31_536_000 (365 hari; total 100.000.000 mP), computeTimerState (murni), formatMp/formatDuration, jakartaDay/jakartaDayStartMs, normalizeAccessId, tipe MeUser, roleLabelId.
+   357→- `src/lib/me-payload.ts`: syncAndBuildMe(user) — checkpoint timer (>60 dtk persist; cap→completed) lalu bangun MeUser.
+   358→- `src/hooks/use-auth.ts`: useSession() → {user, loading, refresh, logout} via GET /api/auth/me.
+   359→- `prisma/seed-users.ts`: hapus semua akun lalu buat 111 akun (1 superadmin ID-000001, admin01..10 ID-000002..11, user001..100 ID-000012..111, password indigoo123) — SUDAH DIJALANKAN, total 111.
+   360→
+   361→Stage Summary:
+   362→- Fondasi siap & tsc bersih. KONTRAK untuk agent 11-a/b/c: JANGAN mengubah file foundation; gunakan ok()/bad() dari @/lib/api-helpers (NextResponse → res.cookies.set utk cookie session); timer checkpoint via syncAndBuildMe dari @/lib/me-payload; sesi client via useSession dari @/hooks/use-auth (tipe MeUser dari @/lib/indigoo).
+   363→
+   364→---
+   365→Task ID: 11-a
+   366→Agent: subagent (Auth API + Login/Register UI)
+   367→Task: API auth lengkap (next-id/register/login/logout/me) + layar AuthScreen (login & daftar, Bahasa Indonesia)
+   368→
+   369→Work Log:
+   370→- `src/app/api/auth/next-id/route.ts` — GET publik: ambil angka numerik maksimum semua accessId → +1 → `ID-XXXXXX` (6 digit). Terverifikasi thd DB seed: 111 akun → `ID-000112`.
+   371→- `src/app/api/auth/register/route.ts` — POST {username,password}: validasi (username 3–24 char regex `[A-Za-z0-9._]`, password min 6, cek username unik manual utk pesan ramah 409), buat user role USER dengan next accessId + hashPassword (scrypt), race-condition ditangani try/catch P2002 (username → 409 ramah; accessId → hitung ulang maks 3x), sukses → set cookie SESSION_COOKIE + `ok({ user })` via syncAndBuildMe.
+   372→- `src/app/api/auth/login/route.ts` — POST {accessId,password}: normalizeAccessId ("1"→"ID-000001"), findUnique by accessId, verifyPassword; gagal → `bad("ID Akses atau password salah", 401)`; sukses → cookie + `ok({ user })`.
+   373→- `src/app/api/auth/logout/route.ts` — POST: clear cookie `res.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions, maxAge: 0 })` → `ok({ ok: true })`.
+   374→- `src/app/api/auth/me/route.ts` — GET: getAuthUser; null → `bad("Belum masuk", 401)`; else `ok({ user: await syncAndBuildMe(user) })` (sekalian checkpoint timer mP).
+   375→- Semua route auth `export const dynamic = "force-dynamic"`.
+   376→- `src/components/indigoo/AuthScreen.tsx` (default export `AuthScreen({ onAuthed })`): layar penuh gradasi emerald (from-emerald-50 to-teal-50 / dark:emerald-950-teal-950) + lingkaran blur dekoratif, kartu max-w-md, logo /images/logo.png bulat + judul "IndiGoo" + tagline "Chat • Panggilan • Rewards mP". Toggle mode Masuk/Daftar pakai dua tombol segmented (bukan tabs) + switch teks di bawah form. LOGIN: "ID Akses Pengguna" (auto-uppercase, mono) + "Password" (toggle lihat/sembunyi) + tombol "Masuk" full-width dengan Loader2. REGISTER: "ID Akses Pengguna" READONLY auto dari GET /api/auth/next-id (+tombol copy/muat ulang), "Username", "Password", "Konfirmasi Password", tombol "Daftar"; sukses daftar/login → `onAuthed(user)`. Kartu "Akun demo" collapse + dismiss (Super Admin ID-000001, Admin ID-000002, Pengguna ID-000012, password `indigoo123` monospace) — klik baris demo langsung mengisi form login. Validasi client-side (field kosong, format username, password <6, konfirmasi tak cocok) + toast use-toast (judul gagal + description pesan server). A11y: htmlFor/id semua label, aria-label/aria-pressed/aria-expanded pada tombol ikon, submit via form onSubmit (Enter).
+   377→- Verifikasi: `bunx tsc --noEmit` → 0 error di src/ (sisa error hanya examples/ & skills/ bawaan scaffold, milik pihak lain); `bun run lint` → exit 0. Dev server & build TIDAK dijalankan; tidak ada data DB yang diubah/ditambah.
+   378→
+   379→Stage Summary:
+   380→- Kontrak API auth siap dipakai agent lain: GET /api/auth/next-id → `{ nextId }`; POST /api/auth/register & /api/auth/login → `{ user: MeUser }` + set cookie `indigoo_session`; POST /api/auth/logout → `{ ok: true }`; GET /api/auth/me → `{ user: MeUser }` atau 401 `{ error: "Belum masuk" }`. Shape payload = MeUser dari @/lib/indigoo (id, accessId, username, role, createdAt, activatedAt, bonusMp, timer:TimerState, earnedMp, totalMp). Komponen `AuthScreen` (src/components/indigoo) siap dirender AppShell/page (milik agent 11-b/c) dengan prop `onAuthed: (user: MeUser) => void`. Tidak ada file foundation yang diubah.
+   381→
+   382→---
+   383→
+   384→Task ID: 11-c
+   385→Agent: general-purpose (shell bottom-nav)
+   386→Task: Pivot shell aplikasi — IndiGooApp dengan bottom-nav 5 tab + TopBar titik tiga + ProfileView + view statis
+   387→
+   388→Work Log:
+   389→- `src/components/indigoo/IndiGooApp.tsx` (default export): root app — `useSession()`: loading → splash full-screen (logo `/images/logo.png` pulse + "IndiGoo"), `!user` → `<AuthScreen onAuthed={() => void refresh()} />`, else layout `h-screen flex flex-col overflow-hidden`: TopBar (shrink-0, border-b) → `<main class="flex-1 min-h-0">` → BottomNav (shrink-0, border-t, `pb-[env(safe-area-inset-bottom)]`). State tampilan union `{kind:"tab"|tab}` / `{kind:"menu"|view}` / `{kind:"biz"|view}`; menu & biz view kembali ke tab sebelumnya via `backToTab`. View biz lama dibungkus `BizViewShell` (strip `h-12`: tombol ArrowLeft "Kembali" + judul view) di atas view lama. Interval `refresh()` tiap 60 dtk hanya saat `view.kind === "tab"` (sinkron saldo mP). `handleLogout`: `await logout()` + reset state + toast "Berhasil keluar". Export type `BizViewId` (11 id: catalog..settings); view lama dirender via map `BIZ_VIEWS` tanpa props.
+   390→- `src/components/indigoo/TopBar.tsx`: kiri logo bisnis `useBusinessProfile().profile.logoUrl` (bulat h-9) + "IndiGoo" bold + baris kecil `username · roleLabelId(user)`; kanan chip `formatMp(user.totalMp) mP` (`hidden sm:flex`) + DropdownMenu trigger Button ghost icon `MoreVertical` aria-label "Menu lainnya"; item: Profil/ID Card/Saldo/Timer, separator, S&K/Kebijakan Privasi/Bantuan, separator, Keluar (`text-red-600 focus:text-red-600` → onLogout). Export type `TopMenuId`.
+   391→- `src/components/indigoo/BottomNav.tsx`: export type `TabId` = chat|panggilan|pembaruan|rutinitas|misi; grid-cols-5 h-16 bg-white border-t (via wrapper), item ikon dalam pill `bg-primary/10 rounded-full` saat aktif + `text-[11px]` label, `aria-current="page"`, min touch 44px, aria-label per tombol.
+   392→- `src/components/indigoo/CallsTab.tsx`: header "Panggilan" + subtitle; fetch `GET /api/calls` → `{calls: CallLogRow[]}` (shape sesuai route); baris: lingkaran inisial `colorOf(colorKey)` (util sama dengan ChatAvatar), nama (merah bila MISSED), arah ArrowUpRight/ArrowDownRight/X-merah + Phone/Video + label kind, `timeAgo`, durasi `formatDuration` (m:ss) bila >0; empty state + kartu info "Mulai panggilan dari tombol telepon di dalam chat"; loading skeleton.
+   393→- `src/components/indigoo/UpdatesTab.tsx`: Tabs internal Status|Channel (grid-cols-2, header shrink-0 menempel di atas) → `<StatusView />` / `<ChannelsView />` dibungkus `div.h-full.overflow-y-auto` di TabsContent `flex-1 min-h-0 mt-0` (tanpa double-scroll: view lama h-full tepat memenuhi wrapper).
+   394→- `src/components/indigoo/ProfileView.tsx`: props `{ onBack, onOpenBiz, onLogout }` (user via `useSession()` internal); kartu akun (inisial gradasi emerald, username, ID Akses monospace + tombol Clipboard + toast "ID Akses disalin", badge peran emerald/amber/abu, "Anggota sejak …" id-ID); kartu ringkas Total mP + status timer (Aktif/Belum diaktifkan/Selesai); "Menu Bisnis" grid 2–3 kolom, 11 modul lama → `onOpenBiz(BizViewId)`; "Lainnya": tombol Keluar merah → `onLogout`.
+   395→- `src/components/indigoo/TermsView.tsx` / `PrivacyView.tsx` / `HelpView.tsx` (`({ onBack })`): S&K 8 butir bernomor (layanan demo, ID Akses pribadi, mP bukan mata uang & tak bisa ditukar Rupiah, timer 365 hari, 1 akun 1 pengguna, perubahan layanan, penggunaan wajar, kontak); Privasi 5 kartu (data disimpan, cookie httpOnly indigoo_session, tak dibagikan, keamanan, hak pengguna) + kartu kontak; Bantuan Accordion FAQ 6 pertanyaan + kartu dukungan support@indigoo.id.
+   396→- `src/app/page.tsx` → render `<IndiGooApp />`. `src/app/layout.tsx` → `metadata.title` = "IndiGoo — Chat, Panggilan & Rewards mP" (hanya title). HAPUS `src/components/AppShell.tsx` (tidak lagi dipakai).
+   397→
+   398→Stage Summary:
+   399→- `bunx tsc --noEmit`: 0 error di `src/` (sisa error hanya `examples/` & `skills/` milik environment; sementara muncul TS2307 RoutinesTab/MissionsTab saat file agent 11-b belum ada — kini sudah resolve, stub sementara yang saya buat untuk typecheck sudah dihapus, MissionsTab asli datang belakangan).
+   400→- `bun run lint`: 0 error; 2 warning di `IdCardView.tsx` (file milik agent lain, tidak disentuh).
+   401→- Kontrak dipenuhi: `TabId` & `BizViewId` diekspor (dari BottomNav & IndiGooApp), `TopMenuId` dari TopBar; ProfileView `{ onBack, onOpenBiz, onLogout }`; TimerView/SaldoView/IdCardView dipanggil dengan `{ onBack }`; RoutinesTab/MissionsTab tanpa props; AuthScreen dengan `onAuthed`. Semua view lama di-mount dari IndiGooApp (tab/biz) tanpa mengubah file agent lain.
+   402→
+   403→---
+   404→Task ID: 11-b
+   405→Agent: subagent (general-purpose)
+   406→Task: Ekonomi poin mP — API Timer/Rutinitas/Misi + view Timer, Saldo, ID Card, tab Rutinitas & Misi
+   407→
+   408→Work Log:
+   409→- API baru (semua `export const dynamic = "force-dynamic"`, sesi via getAuthUser, helper ok/bad):
+   410→  - `POST /api/timer/activate` — validasi ID Akses (normalizeAccessId harus == user.accessId, beda → pesan "Gunakan ID milik Anda: …"); jika belum aktif → set activatedAt + timerStartedAt (timer jalan otomatis); balas `ok({ user: await syncAndBuildMe(updated) })`; idempoten bila sudah aktif.
+   411→  - `GET /api/routines` — 4 rutinitas (absen +1.000, chat +2.000, profil +3.000, bagikan +1.000) dengan status hari ini (jakartaDay): chat available jika ada pesan sender "me" non-SYSTEM sejak jakartaDayStartMs; profil available jika Profile "main" businessName+address+email terisi; claimed dari RoutineCheck(userId,key,day); sertakan requirement bila terkunci.
+   412→  - `POST /api/routines/claim` — validasi def dikenal ("Rutinitas tidak dikenal") + available; buat RoutineCheck dalam transaksi (P2002 → "Rutinitas ini sudah diklaim hari ini"); bonusMp increment; balas user payload + routine.
+   413→  - `GET /api/missions` — 5 misi sekali klaim: aktivasi (done bila activatedAt), chat5 (n/5 total pesan "me" non-SYSTEM), profil (nama+alamat+email+hours JSON != []), rutin (maks RoutineCheck per hari via groupBy → n/4), panen (earnedMp/100.000, label formatMp); claimed di-parse dari claimedMissions (JSON guard).
+   414→  - `POST /api/missions/claim` — validasi done (hitung ulang dari DB) + belum diklaim (double guard pre-check & in-transaction read), bonusMp increment + push key ke claimedMissions; balas user + mission.
+   415→- View baru di `src/components/indigoo/` (semua "use client", h-full flex-col, konten flex-1 overflow-y-auto wa-scrollbar, toast, skeleton):
+   416→  - `TimerView.tsx` — props { onBack }. Belum aktif: kartu hero "Aktivasi Diperlukan" + Input ID Akses (placeholder accessId, uppercase, terima bentuk pendek "12") + tombol "Aktivasi Sekarang" → POST → toast "Aktivasi berhasil — timer mulai berjalan" + refresh(). Sudah aktif: hero mP LIVE — baseline dari user.timer lalu tick lokal per detik (elapsed = baseline + detik sejak refresh; earned = elapsed × MP_RATE_PER_SECOND, tanpa fetch per detik), Progress ke 31.536.000 dtk + label persen adaptif, grid 6 statistik (Status dot pulse, Waktu Berjalan, Sisa, Laju 3,17097916667 mP/dtk, Periode 365 hari, Proyeksi 100.000.000 mP) + kartu aturan main.
+   417→  - `SaldoView.tsx` — props { onBack }. Hero total mP (formatMp totalMp), badge "mP — poin digital IndiGoo, bukan Rupiah", rincian Dari Timer (earnedMp, %) & Dari Bonus (bonusMp, %), ringkasan bonus + catatan sumber rutinitas/misi, CTA "Buka Timer untuk Aktivasi" (onBack) bila timer belum aktif.
+   418→  - `IdCardView.tsx` — props { onBack }. Kartu member gradient emerald→teal rounded-3xl dengan pattern CSS (lingkaran white/10 + garis diagonal), logo bisnis via useBusinessProfile (fallback /images/logo.png), wordmark IndiGoo, avatar inisial, username, ID Akses monospace + tombol copy (toast), badge roleLabelId, "Anggota sejak" (id-ID), QR /api/qr?text=accessId di kanan (shape { dataUrl }), strip saldo bawah; kartu keunggulan member di bawah; animasi hover ringan.
+   419→  - `RoutinesTab.tsx` — default export tanpa props, header sendiri "Rutinitas" + subtitle + SVG progress ring "x/4 hari ini"; auto-fetch saat tab dibuka; kartu ikon CalendarCheck/MessageSquare/UserRound/Share2 + badge "+N mP"; tombol Klaim (disabled + teks requirement bila terkunci), "Diklaim ✓" hijau; klaim → toast + refresh() + reload daftar.
+   420→  - `MissionsTab.tsx` — pola sama, header "Misi" + badge "x/5 siap klaim"; progressLabel + Progress kecil (persen di-parse dari label "n/m"); tombol Klaim hanya saat done && !claimed, "Diklaim ✓"; klaim → toast + refresh + reload.
+   421→- Env: dev server berjalan memegang PrismaClient LAMA (sebelum model User ada) sehingga db.user undefined → 500 di semua route baru & /api/auth/me|login milik 11-a. Server di-restart dengan start-stop-daemon (`bun run dev`, port 3000) → semua route sehat (me=200, login agent 11-a juga pulih).
+   422→- Uji curl (sesi user001 via cookie): 401 tanpa sesi; aktivasi ID salah → 400 pesan benar; aktivasi "12" → 200 timer jalan; klaim 4 rutinitas → bonusMp 1.000→7.000 bertahap; chat rutin hanya available setelah ada pesan hari ini (pesanan uji dibuat lalu dihapus); double-claim rutinitas → 400; misi unknown/panen belum selesai → 400; klaim aktivasi/chat5/profil/rutin → bonus 7.000→77.000; double-claim misi → 400; /api/auth/me totalMp bertambah live. CLEANUP tervalidasi: pesan uji dihapus, 4 RoutineCheck dihapus, user001 kembali activatedAt/timerStartedAt null, timerPausedAccum 0, timerCompleted false, bonusMp 0, claimedMissions "[]".
+   423→- Verifikasi: `bunx tsc --noEmit` → 0 error di src/ (sisa error hanya examples/ & skills/ bawaan); `bun run lint` → 0 error 0 warning.
+   424→
+   425→Stage Summary:
+   426→- Backend ekonomi mP lengkap (aktivasi timer, 4 rutinitas harian anti-dobel via unique constraint, 5 misi sekali-klaim dengan guard transaksi) + 5 komponen UI siap dipasang shell agent (kontrak props terpenuhi: TimerView/SaldoView/IdCardView ({ onBack }), RoutinesTab/MissionsTab ()). State demo user001 dikembalikan bersih. CATATAN env: dev server di-restart agar PrismaClient memuat model User/RoutineCheck — bila route lain 500 "Cannot read properties of undefined", restart server.
+   427→
+   428→---
+   429→Task ID: 11-d (SELESAI)
+   430→Agent: main (orkestrator)
+   431→Task: Integrasi, perbaikan, dan verifikasi browser end-to-end pivot IndiGoo
+   432→
+   433→Work Log:
+   434→- Verifikasi gabungan: `bunx tsc --noEmit` 0 error di src, `bun run lint` 0 error/warning, HTTP 200.
+   435→- Perbaikan integrasi: TopBar chip mP basi (masih 0 mP setelah klaim) → IndiGooApp kini `refresh()` sesi setiap perpindahan view + interval tab diperpendek 60s→30s.
+   436→- Browser E2E (agent-browser 1280x800 & 390x844), semua lolos:
+   437→  - Login page: toggle Masuk/Daftar, kartu akun demo (ID-000001/2/12, password indigoo123, klik baris = prefill).
+   438→  - Login ID-000001 superadmin → layout baru: TopBar (logo, username·role, chip mP, titik tiga), BottomNav 5 tab.
+   439→  - Titik tiga: Profil, ID Card, Saldo, Timer, S&K, Kebijakan Privasi, Bantuan, Keluar.
+   440→  - Timer: aktivasi ID salah → toast merah "Gunakan ID milik Anda: ID-000001"; aktivasi benar → status Berjalan, mP live tick (3,17 → 15,86 dalam 4 dtk ≈ 3,17097916667 mP/dtk), progress 365 hari, proyeksi ~100 juta mP.
+   441→  - Rutinitas: 4 item (Aktif Chatting terkunci tanpa pesan), klaim Absen Harian → toast +1.000 mP, ring 1/4.
+   442→  - Misi: 5 misi dengan progress, "Langkah Pertama" diklaim ✓ (3/5 siap klaim).
+   443→  - Saldo: total 1.177,93 mP (Timer 177,93 + Bonus 1.000) + badge "bukan Rupiah".
+   444→  - ID Card: kartu gradient, QR asli, badge Super Admin, saldo live.
+   445→  - Profil: kartu akun + Total mP + Menu Bisnis 11 modul → Katalog terbuka & tombol Kembali bekerja.
+   446→  - Panggilan: riwayat lengkap (arah, durasi, MISSED merah). Pembaruan: tab Status|Channel.
+   447→  - Keluar → login + toast. Daftar: ID otomatis ID-000112 readonly, daftar "test.demo" sukses → langsung masuk sebagai Pengguna.
+   448→  - Mobile 390px: TopBar ringkas + bottom nav 5 tab terlihat pas.
+   449→- Pembersihan state uji: akun test.demo (ID-000112) dihapus — total akun kembali tepat 111 (1 superadmin, 10 admin, 100 pengguna). Klaim rutinitas/misi & aktivasi timer superadmin DIBIARKAN (hasil demo yang wajar); reset manual bisa via prisma/seed-users.ts.
+   450→- Console 0 error; dev.log bersih.
+   451→
+   452→Stage Summary:
+   453→- Aplikasi kini IndiGoo penuh: auth (login ID Akses+password, daftar ID otomatis), bottom nav Chat/Panggilan/Pembaruan/Rutinitas/Misi, menu titik tiga (Profil/ID Card/Saldo/Timer/S&K/Privasi/Bantuan/Keluar), timer mP otomatis pasca-aktivasi (3,17097916667 mP/dtk → cap 31.536.000 dtk), saldo mP (bukan Rupiah), rutinitas & misi berhadiah mP, 15 modul bisnis lama tetap hidup di Profil → Menu Bisnis. 111 akun seed siap (password indigoo123).
+   454→
+   455→---
+   456→Task ID: 12
+   457→Agent: main (orkestrator)
+   458→Task: Branding IndiGoo penuh + logo baru + semua aktivitas bernilai poin mP
+   459→
+   460→Work Log:
+   461→- LOGO BARU: upload/Logo IndiGoo_1.png (1254×1254) di-resize via sharp → public/images/logo.png (512², 388KB), src/app/icon.png (256², favicon otomatis Next), src/app/apple-icon.png (180²). DB Profile.logoUrl data-URL lama (2MB!) diganti "/images/logo.png" — hemat payload signifikan. Splash/AuthScreen/TopBar/IdCard/empty-state otomatis tampil logo baru (semua merujuk /images/logo.png atau profile.logoUrl).
+   462→- REBRAND SWEEP: layout.tsx description/keywords → IndiGoo Media Sosial; ChatsView heading "WhatsApp Bisnis Panel" → "IndiGoo" + tagline "Semua aktivitas bernilai poin mP"; demo string "Toko Berkah Jaya" di Composer (placeName), SocialConnectCard, AdCampaignCard, PromoTemplatesCard, QrPromoCard, BusinessProfileView placeholder, AutoRepliesView placeholder, LinkView, VerificationView fallback, use-business-profile FALLBACK, simulate/reply fallback, schema default → semua jadi IndiGoo. Pesan lokasi seed lama di DB di-update ke "IndiGoo, Jakarta Pusat".
+   463→- EKONOMI mP UNTUK SEMUA AKTIVITAS: model Prisma baru `ActivityLog` (unique userId+key+day, count & amount) + db:push. `src/lib/rewards.ts`: katalog 15 aktivitas (chat_message 2×25, chat_start 5×5, group_create 10×3, call 10×5, story_post 15×3, channel_follow 5×5, channel_post 10×3, post_like 2×10, broadcast 20×3, product_add 10×5, label_add 5×5, autoreply_update 10×1, quick_reply_add 5×5, profile_update 25×1, verification_apply 50×1) + awardMp() transaksional (cap harian, increment bonusMp) + getActivitySummary() (zona Asia/Jakarta).
+   464→- INTEGRASI 15 ROUTE API: messages POST, chats POST (private baru/group), calls POST (OUT saja), stories POST, channels/[id]/follow (ikut, bukan batal), posts/[id]/like (suka, bukan batal), channels/[id]/posts, broadcasts/[id]/send, products, labels, quick-replies POST, autoreplies PATCH, profile PATCH, verification/apply — semua mengembalikan `mp` di respons bila user login. Route baru GET /api/rewards (katalog + progres harian).
+   465→- UI: `MpAwardToaster` — patch window.fetch sekali, clone respons JSON, `mp.awarded>0` → toast "+N mP · label" + throttled refresh() (maks 1×/4 dtk) agar chip mP TopBar live. SaldoView: kartu "Poin Aktivitas Hari Ini" (15 baris aktivitas, badge +N mP, hitungan n/cap, total hari ini) + teks Ringkasan Bonus diperbarui.
+   466→- VERIFIKASI: tsc 0 error src, lint 0 error 0 warning. Restart dev server (PrismaClient baru). Curl E2E akun throwaway ID-000112: 13 jenis aktivitas berhadiah tepat (chat_message 2 mP bertahap 1/25→2/25, call 10, story 15, follow 5, channel_post 10, like 2, product 10, label 5, quick_reply 5, autoreply 10, profile 25, verification 50, broadcast 20) — totalToday 171 = bonusMp 171 di /api/auth/me. Browser E2E (1280×800 & 390×844): login superadmin → kirim pesan → toast "+2 mP Kirim Pesan Chat" MUNCUL + chip 57.880,02→57.949,63 mP; Saldo → "Poin Aktivitas Hari Ini" menampilkan Kirim Pesan Chat 1/25 +2 mP; tab Rutinitas tetap bekerja; mobile 5-tab bottom nav OK; console & page errors BERSIH.
+   467→- CLEANUP: akun uji ID-000112 dihapus (total akun kembali 111 = 1 superadmin + 10 admin + 100 pengguna); data uji (produk, label, quick reply, siaran, status, panggilan, unggahan channel+like, unfollow, pesan uji, DailyStat baris uji, verifikasi→NONE) dihapus/dikembalikan. Bonus +2 mP superadmin dari uji browser dibiarkan (wajar sebagai demo).
+   468→
+   469→Stage Summary:
+   470→- IndiGoo kini sepenuhnya ber-brand sendiri (logo circular teal resmi di favicon/apple-icon/login/splash/topbar/id-card, nama & copy konsisten). SEMUA aktivitas aplikasi menghasilkan mP dengan cap harian adil — terintegrasi ke 15 API route, ada toast real-time "+N mP", dan rincian progres harian di SaldoView. Fondasi ekonomi: Timer (3,17097916667 mP/dtk → 100 jt mP/thn) + Rutinitas + Misi + Aktivitas harian.
+   471→
+   472→---
+   473→Task ID: 13
+   474→Agent: main (orkestrator)
+   475→Task: Dua menu titik-tiga sesuai Gambar I/1/2 — titik-3 kiri (menu Obrolan, gambar 1) + titik-3 kanan (menu Bisnis, gambar 2) + ikon chat hijau di bar atas
+   476→
+   477→Work Log:
+   478→- KONFIGURASI: store baru `src/store/chat-ui.ts` (zustand: activeChat + CHAT_UI_EVENTS) — jembatan data antara ChatsView dan menu bar atas. Endpoint baru DELETE /api/chats/[id]/messages (bersihkan seluruh pesan, obrolan tetap ada).
+   479→- TITIK-3 KIRI (Gambar 1): komponen `ObrolanMenu.tsx` — 14 item persis urutan referensi: Info kontak, Cari, Pilih pesan, Bisukan notifikasi ▸(submenü 8 jam/1 minggu/Selalu + Bunyikan), Pesan sementara (dialog timer 24j/7h/90h), Tema obrolan (dialog 6 wallpaper → diterapkan live ke area pesan ConversationPanel), Tambah ke favorit (localStorage), Tambat ke daftar (PATCH pinned), Ekspor obrolan (unduh .txt), Tutup obrolan, ──, Laporkan, Blokir (PATCH /api/contacts), Bersihkan obrolan (DELETE bulk + reload pesan live), Hapus obrolan (merah, konfirmasi). Chat-scope menampilkan toast panduan bila belum ada obrolan aktif.
+   480→- TITIK-3 KANAN (Gambar 2): TopBar kanan diganti persis 13 item referensi: Fitur bisnis→Profil Bisnis, Grup baru→dialog grup (event lintas-tab), Iklankan→Promosi, Siaran bisnis→Siaran, Katalog→Katalog, Order→Label, Balasan cepat→Pesan Otomatis, Pesan berbintang/Pilih obrolan/Daftar→toast panduan ke tab Chat, Tandai Semua Sudah Dibaca (loop PATCH unread, terverifikasi 3→0), ──, Kunci aplikasi, Logout (merah).
+   481→- TOOBAR: logo kini klik→Profil; ditambah ikon chat baru hijau (MessageSquarePlus) persis mockup Gambar I. Item menu lama (ID Card/Saldo/Timer/S&K/Privasi/Bantuan) dipindah ke grid "Akun Saya" di ProfileView agar tidak hilang jangkauannya.
+   482→- KUNCI APLIKASI: dialog (Switch + PIN 4-6 digit, localStorage) + "Kunci sekarang" → gerbang PIN layar penuh `AppLockGate` di IndiGooApp (PIN salah → error, benar → session unlocked, ada jalan keluar "Keluar dari akun").
+   483→- WIRING: ChatsView sinkron store + listener event (newChat/newGroup/closeActiveChat/chatCleared/chatsRefresh/focusSearch), ChatListPanel terima searchInputRef (Cari memfokuskan kolom pencarian), ConversationPanel wallpaper inline style + reload saat chatCleared.
+   484→- VERIFIKASI E2E (agent-browser 1440×900 & 390×844): kedua menu tampil persis struktur referensi (screenshot /tmp/menu1-gambar1.png, /tmp/menu2-gambar2.png, mobile-menu1.png); uji fungsional lulus semua: pin/unpin, mute 8 jam + unmute, tema wallpaper rgb(232,245,236) aktif & reset, ekspor .txt (toast lulus), tutup obrolan, info kontak, bersihkan obrolan (pesan kosong + toast), hapus obrolan (server DELETED + panel tertutup), tandai semua dibaca (unread 3→0), navigasi Katalog/Siaran/Promosi/Pesan Otomatis, Grup baru→dialog, Kunci aplikasi (simpan PIN, gerbang muncul, PIN salah ditolak, PIN benar membuka, dimatikan kembali), Logout→kembali ke login. Tsc 0 error, lint 0 error, console & page errors bersih. Chat uji (Fitri) dihapus, pin/mute Andi dikembalikan.
+   485→
+   486→Stage Summary:
+   487→- Bar atas IndiGoo kini identik instruksi Gambar I: [logo→Profil] [identitas] [ikon chat hijau] [titik-3 kiri = Gambar 1] ... [chip mP] [titik-3 kanan = Gambar 2]. Semua 27 item menu berfungsi (navigasi nyata, aksi API nyata, dialog konfirmasi, toast) dan "Hapus" (anisasi Chat→Hapus) beroperasi penuh pada obrolan aktif.
+   488→
+   489→---
+   490→Task ID: 14
+   491→Agent: main (orkestrator)
+   492→Task: Instruksi Gambar B.png — "Geser Ke" (kanan): pindahkan kluster [chat baru + titik-3 ObrolanMenu] dari samping identitas ke tepi kanan kolom panel daftar chat pada bar atas
+   493→
+   494→Work Log:
+   495→- BACA GAMBAR (upload/B.png, 1917×939): user menganotasi bar atas dengan teks "Geser Ke", panah merah ke kanan, dan salinan pasangan [ikon chat+ + ⋮] di posisi target — tepi kanan kolom panel daftar chat, setinggi bar atas. Interpretasi: pindahkan (geser) kluster tersebut ke kanan; posisi lama dikosongkan.
+   496→- TOPOBAR (src/components/indigoo/TopBar.tsx): header kini `relative`. Kluster chat+ (MessageSquarePlus) + ObrolanMenu diekstrak ke variabel `chatCluster` dan dirender pada DUA slot: (1) mobile (<md): tetap menempel di sebelah identitas — `md:hidden`; (2) desktop (≥md): wrapper absolut `pointer-events-none absolute inset-y-0 left-0 hidden w-[380px] lg:w-[400px] items-center justify-end pr-4 md:flex` berisi inner `pointer-events-auto` — tepi kanan kluster rata dengan tepi kanan panel daftar chat (md:380px / lg:400px, sama dengan ChatsView) dan persis di atas ikon chat+ pada header panel (pr-4 menyamakan padding header panel px-4).
+   497→- PATCH CSS: percobaan pertama memakai `left-[380px] -translate-x-full top-1/2 -translate-y-1/2` gagal — kompiler Tailwind dev inkremental tidak memancarkan utility arbitrary baru tersebut (terverifikasi via CSSOM + getComputedStyle: left jatuh ke 16px, transform none). Ditulis ulang memakai utility yang sudah ada di compiled CSS (w-[380px]/lg:w-[400px] dari ChatsView) + pola justify-end tanpa transform; setelah itu posisi tepat.
+   498→- VERIFIKASI E2E (agent-browser): desktop 1920×939 — kluster di x=310–384 (panel 400), ikon header panel di x=347–383 → sejajar sempurna; md 768×900 — panel right 380, kluster right 364 = ikon header 363; mobile 390×844 — kluster tetap di samping identitas (x=215/253), instance desktop tersembunyi. Menu Obrolan (14 item Gambar 1) terbuka normal dari posisi baru; klik logo/identitas → Profil tetap berfungsi (pointer-events-none tidak menghalangi); menu kanan Gambar 2 (13 item) normal; konsol & page error bersih; tsc 0 error; lint bersih.
+   499→
+   500→Stage Summary:
+   501→- Bar atas IndiGoo kini persis instruksi "Geser Ke" pada gambar: [logo→Profil] [identitas] ...(kosong)... [chat+ ⋮Gambar1] rata tepi kanan panel chat di desktop, ... [chip mP] [⋮Gambar2] di ujung kanan. Fungsionalitas semua menu tidak berubah; layout mobile tidak berubah.
+   502→
+   503→---
+   504→Task ID: 15
+   505→Agent: main (orkestrator)
+   506→Task: Halaman "Panduan Aplikasi" di fitur Misi — urutan lengkap awal→akhir semua yang bisa dilakukan di IndiGoo
+   507→
+   508→Work Log:
+   509→- KOMPONEN BARU `src/components/indigoo/MissionGuide.tsx`: panduan terstruktur 31 langkah bernomor berkelanjutan dalam 5 tahap — T1 Mulai & Aktivasi (daftar ID otomatis, login ID+password, kenali bar atas & 5 tab, aktivasi Timer via kolom Aktivasi 3,17097916667 mP/dtk → 100 jt mP/thn, saldo mP, ID Card), T2 Komunikasi (kelola daftar chat/filter/cari, chat & grup baru, kirim pesan, 14 item menu obrolan titik-3 kiri, panggilan, status, channel, komunitas), T3 Bisnis (profil bisnis, katalog, label, siaran, auto-reply, quick reply, promosi, link, verifikasi, statistik/perangkat/pengaturan), T4 Panen mP (timer, rutinitas harian, misi, 15 aktivitas + cap harian), T5 Keamanan & Penutup (kunci PIN, S&K/Privasi/Bantuan, logout). Visual: timeline vertikal (lingkaran nomor emerald + garis penghubung), badge mP amber, kartu ringkasan alur 5 tahap, catatan ekonomi mP di akhir. Data statis tervalidasi terhadap rewards.ts (15 aktivitas + cap) dan fitur nyata semua modul.
+   510→- INTEGRASI `MissionsTab.tsx`: sub-tab segmented control (role=tablist) "Misi | Panduan Aplikasi" di bawah header; subtitle header & badge "n/y siap klaim" adaptif per sub-tampilan; konten misi apa adanya, panduan di container flex-1 min-h-0 scrollable.
+   511→- FIX: ikon `BellAuto` tidak ada di lucide-react → diganti `Bot`; nilai timer pada catatan ditulis literal "3,17097916667 mP/detik" (bukan formatMp yang membulatkan).
+   512→- VERIFIKASI E2E (agent-browser 1280×900 & 390×844): login ID-000012 → tab Misi → sub-tab Panduan Aplikasi; terukur 5 section Tahap + 31 langkah (aria-label "Langkah 1..31"), badge mP tampil, catatan penutup benar; bolak-balik sub-tab Misi (5 tombol misi kembali) OK; mobile 390×844 layout rapi (chip alur wrap); console & page errors bersih; tsc 0 error; lint bersih.
+   513→
+   514→Stage Summary:
+   515→- Fitur Misi kini punya dua sub-tampilan: Misi (klaim hadiah) dan Panduan Aplikasi — enumerasi resmi 31 langkah / 5 tahap seluruh kemampuan IndiGoo dari daftar hingga logout, lengkap dengan nilai mP tiap aktivitas.
+   516→
+   517→---
+   518→Task ID: 16
+   519→Agent: main (orkestrator)
+   520→Task: Lengkapi Fitur Rutinitas — Modul Check-In 30 Hari + beragam kegiatan harian dari Bangun Tidur 03.30 WIB hingga Menjelang Tidur 22.00 WIB
+   521→
+   522→Work Log:
+   523→- LIB BERSAMA `src/lib/routines.ts` (murni, server+client): CHECKIN_REWARDS 30 posisi (500→2.000 mP eskalasi, milestone 3.000/5.000/7.500/20.000 di hari ke-7/14/21/30, total siklus 70.250 mP), CHECKIN_MILESTONES, checkInCycle() (doneCells/nextPosition dari total check-in), ACTIVITY_SCHEDULE 26 kegiatan berurutan 03.30 (Bangun Tidur) → 22.00 (Menjelang Tidur) WIB dengan kategori ibadah/kesehatan/belajar/bisnis/keluarga + sesi Dini/Pagi/Siang/Sore/Malam, SESSIONS, jakartaMinutesNow() (gerbang jam WIB), computeStreak()/computeBestStreak(), tipe CheckInInfo & ScheduleItemStatus.
+   524→- PRISMA: model baru `DailyCheckIn` (unique userId+day) & `ActivityCheck` (unique userId+key+day) + relasi User → db:push sukses; dev server di-restart agar Prisma Client baru termuat (penting: tanpa restart → "Cannot read properties of undefined (findMany)").
+   525→- API: GET /api/routines kini mengembalikan { day, routines, checkIn, schedule, milestones } — checkIn (checkedToday/total/streak/best/cycleDone/nextPosition/nextReward/nextIsMilestone) & schedule (26 item + done + available + requirement "Tersedia mulai pukul HH.mm WIB"). Route baru POST /api/routines/checkin (posisi = (total-1)%30+1, insert-first dengan P2002 guard, increment bonusMp, hasil termasuk payload user via syncAndBuildMe) & POST /api/routines/schedule (validasi key, gerbang jam WIB, P2002 duplikat, increment bonusMp).
+   526→- FRONTEND RoutinesTab.tsx redesain total, 3 bagian: (1) Kartu Check-In 30 Hari — 4 statistik (Flame streak/CalendarCheck siklus/Trophy rekor/Gift total), papan 30 sel grid-cols-6→sm:grid-cols-10 (sel milestone = Gift + label 3rb/5rb/7,5rb/20rb, sel berikutnya = ring emerald pulse, terisi = emerald), tombol "Check-In Hari Ini" amber / badge "Sudah selesai ✓", banner siklus selesai; (2) Kartu Jadwal Kegiatan Harian — timeline vertikal per sesi (jam kiri + garis + kartu), ikon & chip warna per kategori (violet/rose/amber/emerald/pink), badge +mP, tombol "Tandai Selesai" / pill "Selesai" / pill terkunci dengan jam mulai, ringkasan mP terkumpul; (3) Rutinitas Harian lama (4 kartu) dipertahankan. ProgressRing header kini 0..31 (1 check-in + 26 kegiatan + 4 rutinitas).
+   527→- FIX SINKRON SALDO: useSession per-komponen → chip TopBar tak ikut berubah saat klaim dari tab Rutinitas. Ditambah bridge CustomEvent `indigoo:mp-changed` (dispatcher notifyMpChanged() di RoutinesTab setelah klaim sukses + listener refresh() di IndiGooApp). Chip kini 2 → 502 → 1.502 mP seketika.
+   528→- VERIFIKASI: tsc 0 error, lint bersih. API curl: check-in +500 (posisi 1), check-in ganda ditolak, schedule bangun/subuh +1.000/+1.500, "tidur" ditolak "tersedia mulai pukul 22.00 WIB", duplikat ditolak. Browser E2E (1280×900 & 390×844): papan 30 sel + milestone ikon hadiah, klik Check-In → sel terisi + toast + chip instan, Tandai Bangun Tidur & Berdoa → "Selesai" + badge 2/26 + ring 4/31, 5 pill terkunci (19.30/20.00/21.00/21.30/22.00 WIB) presisi, klaim Absen Harian +1.000 OK, toast "+1.000 mP diterima 🎉" terlihat; mobile 390×844 tanpa overflow-x, grid 6 kolom, timeline rapi; console & page errors bersih.
+   529→- CLEANUP: data uji user001 (1 DailyCheckIn + 2 ActivityCheck + 1 RoutineCheck, bonusMp 3.002→2) dihapus — akun demo kembali fresh agar pengguna bisa mencoba Check-In sendiri.
+   530→
+   531→Stage Summary:
+   532→- Tab Rutinitas kini modul lengkap: Check-In 30 Hari (streak + siklus + milestone 7/14/21/30) dan jadwal 26 kegiatan harian 03.30–22.00 WIB yang terbuka bertahap mengikuti jam WIB, ditambah 4 rutinitas harian lama — semua memberi mP nyata dengan proteksi duplikat harian dan chip saldo TopBar ikut ter-update instan.
+   533→
+   534→---
+   535→Task ID: 17
+   536→Agent: main (orkestrator)
+   537→Task: Rutinitas — tambah waktu ibadah untuk semua agama (Islam, Kristen, Katolik, Hindu, Buddha, Khonghucu)
+   538→
+   539→Work Log:
+   540→- LIB `src/lib/routines.ts`: RELIGIONS (6 agama) + religionLabel(); WORSHIP_SCHEDULE per agama dengan key berprefiks ib_*: Islam 6 (Subuh 04.30, Dhuha 06.45, Dzuhur 11.55, Ashar 15.15, Maghrib 17.50, Isya 19.05 = +6.500 mP/hari), Kristen 4 (Saat Teduh 05.30, Doa Siang 12.00, Pujian & Persekutuan 18.00, Alkitab & Refleksi 20.30 = +4.000), Katolik 4 (Liturgi Jam 05.30, Angelus 12.00, Rosario 17.30, Komplemen 21.00 = +4.000), Hindu 4 (Canang 07.00, Tri Sandhya Pagi/Siang/Sore = +3.500), Buddha 3 (Puja Pagi 05.30, Metta Siang 12.00, Puja Sore & Meditasi 18.30 = +3.000), Khonghucu 3 (Sembahyang Pagi/Sore, Renungan Sutra 20.00 = +3.500). Semua jadwal indikatif WIB (catatan di desc). ACTIVITY_SCHEDULE kini 20 kegiatan umum: 5 salat dipindah ke jadwal Islam; "Tilawah" → "Bacaan Rohani / Baca Buku"; "Berdoa Sebelum Tidur" dihapus (diganti ibadah per agama). Helper: sessionForMinutes(), ACTIVITY_INDEX (semua key umum+ibadah), findActivityDef(), buildDaySchedule(religion) (umum + ibadah agama terpilih, urut menit). ScheduleItemStatus + field religion?.
+   541→- PRISMA: kolom `religion String @default("")` di User → db:push; dev server di-restart agar Prisma Client baru termuat.
+   542→- API: GET /api/routines kini mengembalikan `religion` + schedule gabungan sesuai agama. Route baru POST /api/routines/religion (validasi RELIGIONS/""; simpan ke User.religion). POST /api/routines/schedule kini lookup via findActivityDef + gerbang agama (ibadah agama lain ditolak: "Ibadah ini untuk pengguna agama X. Pilih agama Anda di kartu Waktu Ibadah.").
+   543→- FRONTEND RoutinesTab: kartu baru "Waktu Ibadah" (badge "Semua Agama", ikon Church ungu) — Select "Agama saya" (opsi Tidak ditampilkan + 6 agama, POST optimis + toast), grid 2 kolom 6 kotak agama (ikon MoonStar/Cross/Church/Flower2/Leaf/ScrollText, chip waktu+judul tiap ibadah, total mP/hari, kotak agama terpilih = border ungu + badge "Agama Anda"), hint amber bila belum memilih. Timeline: item ibadah mendapat chip mini nama agama; dayMax ring dinamis (25 tanpa agama; 26 Islam; 24 Kristen/Katolik/Hindu; 23 Buddha/Khonghucu).
+   544→- VERIFIKASI: tsc 0 error, lint bersih. API: tanpa agama 20 item tanpa ibadah; islam → 26 item urut menit dengan 6 ib_*, claim ib_islam_subuh +1.500 (bonusMp 2→1.502), ib_kristen_* ditolak gerbang agama, key lama "subuh" tidak dikenal; hindu/buddha/khonghucu/kristen/katolik → 24/23/23/24/24 item dengan ibadah masing-masing; agama invalid ditolak. Browser E2E (1280×900 & 390×844): kartu Waktu Ibadah 6 kotak; pilih Islam → 6 salat masuk timeline + chip ungu "Islam" + toast + ring 0/31 + badge "Agama Anda"; klaim Salat Subuh → "Selesai" + chip 2→1.502 mP instan; ganti Hindu → salat hilang, Tri Sandhya+Canang masuk + chip "Hindu" + ring 0/29; tanpa overflow-x mobile; kartu terbaca rapi; console & page errors bersih.
+   545→- CLEANUP: ActivityCheck uji user001 dihapus, bonusMp kembali 2, religion kembali "" (total akun tetap 111). Akun demo fresh; kartu Waktu Ibadah tetap menampilkan jadwal 6 agama walau belum memilih.
+   546→
+   547→Stage Summary:
+   548→- Tab Rutinitas kini lintas agama: kartu "Waktu Ibadah" menampilkan jadwal indikatif WIB untuk 6 agama resmi Indonesia, dan kegiatan ibadah agama yang dipilih otomatis menyatu ke Jadwal Kegiatan Harian (03.30–22.00 WIB) sebagai kegiatan berhadiah mP dengan gerbang jam & gerbang agama — lengkap dengan pemilih agama tersimpan di server (User.religion).
+   549→

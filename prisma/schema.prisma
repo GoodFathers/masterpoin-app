@@ -1,0 +1,625 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== BISNIS / PROFIL =====================
+model Profile {
+  id            String   @id @default(cuid())
+  // Task 34: profil bisnis kini MILIK SATU PENGGUNA (1:1) — bukan lagi singleton
+  // "main" yang dibagi semua akun. userId null hanya pada baris lama migrasi.
+  userId        String?  @unique
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName  String   @default("")
+  ownerName     String   @default("")
+  category      String   @default("")
+  description   String   @default("")
+  address       String   @default("")
+  lat           Float    @default(-7.7956)
+  lng           Float    @default(110.3695)
+  phone         String   @default("")
+  email         String   @default("")
+  website       String   @default("")
+  instagram     String   @default("")
+  facebook      String   @default("")
+  tiktok        String   @default("")
+  hours         String   @default("[]") // JSON: [{day, open, close, closed}]
+  logoUrl       String   @default("/images/logo.png")
+  coverUrl      String   @default("") // latar (cover) kartu profil bisnis; "" = warna solid bawaan
+  verified      Boolean  @default(false)
+  // Verifikasi bisnis
+  verificationStatus String @default("NONE") // NONE | PENDING | VERIFIED
+  brandProtected     Boolean @default(false)
+  // Privasi
+  lastSeen        String  @default("everyone") // everyone | contacts | nobody
+  onlineStatus    String  @default("everyone")
+  profilePhotoVis String  @default("everyone")
+  statusVis       String  @default("contacts")
+  readReceipts    Boolean @default(true)
+  twoStepEnabled  Boolean @default(false)
+  blockedStrangers Boolean @default(false)
+  // Notifikasi
+  notifMessages Boolean @default(true)
+  notifGroups   Boolean @default(true)
+  notifCalls    Boolean @default(true)
+  notifPreview  Boolean @default(true)
+  notifSound    Boolean @default(true)
+  // Akun
+  phoneNumber   String  @default("")
+  autoBackup    String  @default("daily") // off | daily | weekly | monthly
+  // Pesan otomatis
+  greetingEnabled Boolean @default(true)
+  greetingText    String  @default("")
+  awayEnabled     Boolean @default(false)
+  awayText        String  @default("")
+  storeOpen       Boolean @default(true)
+  updatedAt       DateTime @updatedAt
+}
+
+// ===================== KONTAK & LABEL =====================
+model Label {
+  id        String @id @default(cuid())
+  name      String
+  colorKey  String @default("amber")
+  sortOrder Int    @default(0)
+}
+
+model Contact {
+  id       String    @id @default(cuid())
+  name     String
+  phone    String
+  colorKey String    @default("emerald")
+  about    String    @default("Tersedia")
+  lastSeen DateTime?
+  blocked  Boolean   @default(false)
+  labelIds String    @default("[]") // JSON array of Label ids
+  chats    Chat[]
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+// ===================== CHAT & PESAN =====================
+model Chat {
+  id             String    @id @default(cuid())
+  type           String    @default("PRIVATE") // PRIVATE | GROUP
+  name           String?
+  avatarUrl      String?
+  colorKey       String    @default("emerald")
+  contactId      String?
+  contact        Contact?  @relation(fields: [contactId], references: [id])
+  members        String    @default("[]") // JSON array [{contactId, role}]
+  groupDesc      String    @default("")
+  pinned         Boolean   @default(false)
+  archived       Boolean   @default(false)
+  muted          Boolean   @default(false)
+  unread         Int       @default(0)
+  isBusinessChat Boolean   @default(false)
+  favorite       Boolean   @default(false)
+  disappearing   String    @default("off") // off | 24h | 7d | 90d
+  lastMessageAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  messages       Message[]
+
+  // Batch 4: daftar chat diurut pinned + lastMessageAt; relasi per kontak
+  @@index([lastMessageAt])
+  @@index([contactId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender    String   @default("me") // "me" | contactId | "system"
+  type      String   @default("TEXT") // TEXT | IMAGE | VIDEO | AUDIO | DOC | LOCATION | CONTACT_CARD | PRODUCT | SYSTEM
+  body      String   @default("")
+  mediaUrl  String?
+  mediaName String?
+  mediaMime String?
+  mediaSize Int?
+  latitude  Float?
+  longitude Float?
+  placeName String?
+  cardName  String?
+  cardPhone String?
+  productId String?
+  status    String   @default("READ") // PENDING | SENT | DELIVERED | READ | FAILED
+  starred   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Batch 4: paginasi kursor pesan per chat (before/after createdAt)
+  @@index([chatId, createdAt])
+  // Batch 4: daftar pesan berbintang diurut terbaru (take 200)
+  @@index([starred, createdAt])
+}
+
+model CallLog {
+  id          String   @id @default(cuid())
+  contactId   String?
+  contactName String
+  colorKey    String   @default("emerald")
+  kind        String   @default("VOICE") // VOICE | VIDEO
+  direction   String   @default("OUT") // IN | OUT | MISSED
+  durationSec Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  // Batch 4: riwayat panggilan diurut terbaru + redial per kontak
+  @@index([createdAt])
+  @@index([contactId])
+}
+
+// ===================== KATALOG =====================
+model Collection {
+  id       String    @id @default(cuid())
+  name     String
+  products Product[]
+}
+
+model Product {
+  id           String      @id @default(cuid())
+  name         String
+  price        Float
+  description  String      @default("")
+  sku          String      @unique
+  imageUrl     String?
+  link         String      @default("")
+  stock        Int         @default(0)
+  available    Boolean     @default(true)
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id])
+  createdAt    DateTime    @default(now())
+}
+
+// ===================== STATUS / STORY =====================
+model Story {
+  id        String   @id @default(cuid())
+  sender    String   @default("me") // "me" | contactId
+  mediaType String   @default("IMAGE") // TEXT | IMAGE | VIDEO
+  body      String   @default("")
+  mediaUrl  String?
+  bgColor   String   @default("emerald")
+  views     Int      @default(0)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  // Batch 4: feed status hanya mengambil yang belum kedaluwarsa
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+// ===================== SIARAN =====================
+model Broadcast {
+  id             String    @id @default(cuid())
+  name           String
+  message        String
+  mediaUrl       String?
+  audienceType   String    @default("ALL") // ALL | LABEL
+  audienceLabel  String?
+  recipientCount Int       @default(0)
+  sentCount      Int       @default(0)
+  deliveredCount Int       @default(0)
+  readCount      Int       @default(0)
+  failedCount    Int       @default(0)
+  status         String    @default("DRAFT") // DRAFT | SENDING | SENT
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+
+  // Batch 4: daftar siaran diurut terbaru
+  @@index([createdAt])
+}
+
+model QuickReply {
+  id        String @id @default(cuid())
+  shortcut  String @unique
+  message   String
+  sortOrder Int    @default(0)
+}
+
+// ===================== CHANNEL & KOMUNITAS =====================
+model Channel {
+  id          String        @id @default(cuid())
+  ownerId     String? // pemilik channel (Task 45) — sesi pengguna yang membuat; null = data legacy
+  owner       User?         @relation(fields: [ownerId], references: [id])
+  name        String
+  handle      String        @unique
+  description String        @default("")
+  colorKey    String        @default("emerald")
+  imageUrl    String? // foto profil channel (avatar)
+  coverUrl    String        @default("") // latar belakang kartu channel; "" = gradasi bawaan
+  followers   Int           @default(0)
+  following   Boolean       @default(false)
+  isMine      Boolean       @default(false) // legacy — kini dihitung per sesi (ownerId === sesi)
+  verified    Boolean       @default(false)
+  posts       ChannelPost[]
+  createdAt   DateTime      @default(now())
+}
+
+model ChannelPost {
+  id        String   @id @default(cuid())
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  body      String
+  imageUrl  String?
+  likes     Int      @default(0)
+  likedByMe Boolean  @default(false)
+  views     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([channelId, createdAt])
+}
+
+model Community {
+  id           String   @id @default(cuid())
+  ownerId      String? // pemilik komunitas (Task 46) — null = komunitas demo bawaan
+  owner        User?    @relation(fields: [ownerId], references: [id])
+  name         String
+  description  String   @default("")
+  colorKey     String   @default("teal")
+  imageUrl     String   @default("") // foto profil/logo komunitas (Task 47); "" = tampil inisial + warna
+  coverUrl     String   @default("") // foto latar belakang komunitas (Task 47); "" = tampil gradasi warna
+  memberCount  Int      @default(0)
+  groups       String   @default("[]") // JSON array [{id,name,members,description,chatId?}]
+  announcement String   @default("")
+  createdAt    DateTime @default(now())
+}
+
+// ===================== PERANGKAT & STATISTIK =====================
+model Device {
+  id         String   @id @default(cuid())
+  name       String
+  platform   String   @default("WEB") // PHONE | WEB | DESKTOP | TABLET
+  current    Boolean  @default(false)
+  lastActive DateTime @default(now())
+  location   String   @default("Yogyakarta, Indonesia")
+}
+
+model DailyStat {
+  id        String @id @default(cuid())
+  date      String @unique
+  sent      Int    @default(0)
+  delivered Int    @default(0)
+  read      Int    @default(0)
+  received  Int    @default(0)
+  failed    Int    @default(0)
+}
+
+model ChatBackup {
+  id           String   @id @default(cuid())
+  sizeKb       Int
+  messageCount Int
+  auto         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+// ===================== TIKET DUKUNGAN (nyata) =====================
+model SupportTicket {
+  id        String   @id @default(cuid())
+  code      String   @unique // "MB-1234"
+  subject   String
+  message   String
+  status    String   @default("OPEN") // OPEN | CLOSED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Batch 4: daftar tiket terbaru (take 20)
+  @@index([createdAt])
+}
+
+// ===================== PESANAN KATALOG (nyata) =====================
+model Order {
+  id            String   @id @default(cuid())
+  code          String   @unique // "ORD-12345"
+  customerName  String   @default("")
+  customerPhone String   @default("")
+  note          String   @default("")
+  items         String   @default("[]") // JSON snapshot [{productId,name,price,qty}]
+  total         Float    @default(0)
+  status        String   @default("NEW") // NEW | PROCESSING | COMPLETED | CANCELLED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Batch 4: riwayat pesanan terbaru (take 20) + saring status
+  @@index([createdAt])
+  @@index([status])
+}
+
+// ===================== VERIFIKASI (riwayat nyata) =====================
+model VerificationLog {
+  id        String   @id @default(cuid())
+  userId    String? // Task 34: riwayat verifikasi terikat ke akun pemilik profil
+  status    String // SUBMITTED | APPROVED | REJECTED
+  note      String   @default("")
+  criteria  String   @default("[]") // JSON: [{key,label,pass,detail}]
+  createdAt DateTime @default(now())
+
+  // Batch 4: riwayat verifikasi terbaru (take 10)
+  @@index([createdAt])
+}
+
+// ===================== AKUN & HAK AKSES =====================
+// Peran: SUPER_ADMIN (semua akses: kelola akun, konten, marketplace, upload)
+//        ADMIN        (kelola konten & marketplace, upload)
+//        USER         (Pengguna: upload foto/video sendiri + fitur umum)
+model User {
+  id        String      @id @default(cuid())
+  accessId  String      @unique // nomor akun "ID-000001" (bisa dipakai login)
+  username  String      @unique
+  name      String      @default("")
+  password  String // scrypt "salt:hash"
+  pin       String    @default("") // PIN 6 angka utk pendaftaran mandiri — scrypt "salt:hash"; kosong = belum diset (akun seed)
+  role      String      @default("USER") // SUPER_ADMIN | ADMIN | USER
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  videos    VideoPost[]
+  channels  Channel[] // channel milik pengguna ini (Task 45)
+  communities Community[] // komunitas milik pengguna ini (Task 46)
+  appointments Appointment[] // janji temu pribadi (pengganti fitur Misi)
+  matrixNode MatrixNode? // posisi dalam Hybrid Matrix Spillover 3 Fase (Task 82)
+
+  // ===================== EKONOMI mP INDIIGOO =====================
+  // Timer mP (lib/indigoo.ts): 3,17 mP/dtk hingga 31.536.000 dtk (100 jt mP).
+  religion         String    @default("") // "" | islam | kristen | katolik | hindu | buddha | khonghucu
+  bonusMp          Float     @default(0) // mP dari hadiah aktivitas/check-in/appointment (di luar timer)
+  activatedAt      DateTime? // waktu timer mP diaktivasi pertama kali
+  timerStartedAt   DateTime? // checkpoint mulai berjalan (null = sedang jeda/selesai)
+  timerPausedAccum Int       @default(0) // akumulasi detik yang sudah terkumpul saat jeda/checkpoint
+  timerCompleted   Boolean   @default(false)
+
+  // ===================== PERMOHONAN AKTIVASI TIMER =====================
+  // Timer mP hanya berjalan setelah pengguna menyampaikan permohonan
+  // "AKTIVASI" dan manajemen (Super Admin/Admin) menyetujuinya.
+  activationStatus      String    @default("NONE") // NONE | PENDING | APPROVED | REJECTED
+  activationRequestedAt DateTime? // waktu pengguna mengirim permohonan
+  activationProcessedAt DateTime? // waktu manajemen memproses (setujui/tolak)
+  activationProcessedBy String?   // username manajemen yang memproses
+
+  // ===================== HAK AKSES & DASBOR (diatur Super Admin) =====================
+  perms     String @default("[]") // JSON array Perm tambahan di luar matriks peran
+  dashboard String @default("beranda") // view awal pengguna setelah masuk (dasbor)
+  latitude         Float?    // lokasi terakhir (fitur Maps — /api/location)
+  longitude        Float?
+  locationAt       DateTime?
+
+  // ===================== REFERRAL =====================
+  referralCode   String? @unique // kode undangan pribadi "REF-000001" (dibuat otomatis/lazy)
+  referredByCode String? // kode referral milik pengundang (diisi saat pakai kode teman)
+
+  // ===================== PROFIL BISNIS (Task 34: 1:1 per pengguna) =====================
+  profile Profile?
+}
+
+// ===================== BERANDA (FEED VIDEO) =====================
+model VideoPost {
+  id           String   @id @default(cuid())
+  title        String
+  category     String   @default("hiburan") // hiburan | domisili | promo
+  authorName   String   @default("Saya")
+  authorType   String   @default("demo") // demo | user
+  authorUserId String?
+  author       User?    @relation(fields: [authorUserId], references: [id])
+  videoUrl     String
+  posterUrl    String   @default("")
+  likes        Int      @default(0)
+  views        Int      @default(0)
+  isFollower   Boolean  @default(false) // penulis mengikuti bisnis saya (tab Pengikut)
+  isFollowing  Boolean  @default(false) // saya mengikuti penulis (tab Diikuti)
+  createdAt    DateTime @default(now())
+
+  comments VideoComment[]
+
+  @@index([createdAt])
+  // Batch 4: tab kategori beranda menyaring per kategori
+  @@index([category])
+}
+
+// ===================== MARKETPLACE =====================
+model MarketItem {
+  id          String   @id @default(cuid())
+  name        String
+  price       Float
+  emoji       String   @default("🛍️")
+  colorKey    String   @default("emerald")
+  category    String   @default("kerajinan") // makanan | fashion | kerajinan | jasa | agro
+  sellerName  String
+  sellerPhone String   @default("")
+  location    String   @default("Yogyakarta")
+  rating      Float    @default(4.8)
+  sold        Int      @default(0)
+  stock       Int      @default(10)
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+// ===================== EKONOMI mP INDIIGOO (Panel Super Admin) =====================
+// Konfigurasi flag fitur & override nilai mP — pasangan key→value JSON.
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique // "features" | "rewards"
+  value     String   @default("{}") // JSON
+  updatedAt DateTime @updatedAt
+}
+
+// Check-In 30 Hari — 1 baris per hari per pengguna (unik userId+day).
+model DailyCheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  day       String // "YYYY-MM-DD" kalender Asia/Jakarta
+  createdAt DateTime @default(now())
+
+  @@unique([userId, day])
+  @@index([userId, createdAt])
+  @@index([day])
+}
+
+// Kegiatan jadwal harian (umum + ibadah) & tugas misi harian yang ditandai.
+model ActivityCheck {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String // key kegiatan / "mission:<key>" untuk cooldown misi
+  day       String // "YYYY-MM-DD" WIB
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key, day])
+  @@index([userId, createdAt])
+  @@index([day])
+}
+
+// Klaim 4 rutinitas harian (absen/chat/profil/bagikan).
+model RoutineCheck {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  day       String // "YYYY-MM-DD" WIB
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key, day])
+  @@index([userId, createdAt])
+  @@index([day])
+}
+
+// Log hadiah aktivitas otomatis (cap harian per key per pengguna).
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String // key katalog REWARD_CATALOG
+  day       String // "YYYY-MM-DD" WIB
+  count     Int      @default(0) // kejadian berhadiah hari ini
+  amount    Float    @default(0) // total mP hari ini utk key ini
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key, day])
+  @@index([day])
+}
+
+// ===================== MEDIA UNGGAHAN (PERSISTEN) =====================
+// Seluruh berkas unggahan (chat, status, produk, logo, channel, komunitas,
+// siaran, video) disimpan langsung di database (Bytes/BLOB), bukan filesystem,
+// agar tetap utuh di produksi (filesystem serverless hanya-baca).
+// URL publik tetap memakai bentuk lama /uploads/<kind>/<name> — disajikan
+// lewat /api/media/<name> (rewrite next.config), sehingga semua referensi
+// lama di pesan/produk/channel tetap hidup tanpa migrasi data.
+model Media {
+  id           String   @id @default(cuid())
+  kind         String   @default("misc") // chat|photo|video|product|logo|cover|broadcast|channel|…
+  name         String   @unique // nama berkas unik, mis. "1793…-a1b2c3d4e5f6.png"
+  originalName String   @default("") // nama asli berkas milik pengguna
+  mimeType     String   @default("application/octet-stream")
+  size         Int      @default(0) // ukuran total (byte)
+  data         Bytes? // isi berkas — null selagi unggahan bertahap (chunk) berjalan
+  status       String   @default("ready") // ready | pending
+  totalChunks  Int      @default(0) // 0 = unggahan sekali jalan
+  uploadedById String   @default("")
+  createdAt    DateTime @default(now())
+
+  chunks      MediaChunk[]
+
+  @@index([kind, createdAt])
+}
+
+// Potongan berkas untuk unggahan besar (>4 MB, melewati batas body serverless).
+// Digabung otomatis ke Media.data saat potongan terakhir tiba, lalu dibuang.
+model MediaChunk {
+  id      String @id @default(cuid())
+  mediaId String
+  idx     Int // urutan potongan mulai 0
+  data    Bytes
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, idx])
+}
+
+// ===================== VIDEO BERANDA: TONTONAN & KOMENTAR =====================
+// VideoWatch: catatan "pengguna X menonton video Y hari Z" — kunci unik
+// (userId, videoId, day) memastikan hadiah "Poin Menonton" hanya diberikan
+// satu kali per video per hari (anti-farming loop autoplay).
+model VideoWatch {
+  id        String   @id @default(cuid())
+  userId    String
+  videoId   String
+  day       String // "YYYY-MM-DD" WIB
+  mp        Float    @default(0) // mP yang diberikan untuk tontonan ini
+  createdAt DateTime @default(now())
+
+  @@unique([userId, videoId, day])
+  @@index([userId, day])
+}
+
+// VideoComment: komentar pengguna pada video Beranda. Nama disimpan sebagai
+// snapshot agar komentar tetap tampil meski profil pengguna berubah.
+model VideoComment {
+  id        String   @id @default(cuid())
+  videoId   String
+  userId    String   @default("") // kosong bila penulis akunnya terhapus
+  name      String   @default("") // snapshot nama penulis
+  body      String
+  createdAt DateTime @default(now())
+
+  video VideoPost @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, createdAt])
+}
+
+// ===================== APPOINTMENT (PENGGANTI FITUR MISI) =====================
+// Janji temu pribadi yang dibuat sendiri oleh pengguna. Setiap pembuatan
+// berhadiah 10.000 mP (default, dioverride Panel Super Admin lewat
+// cfg.rewards.appointment) dengan batas 5 pembuatan per hari WIB.
+// `day` = hari pembuatan (bukan hari jadwal) — dasar penghitungan cap harian.
+// Pembatalan TIDAK mengembalikan mP dan tetap dihitung di cap (anti panen ulang).
+model Appointment {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String // 3–100 karakter
+  location    String   @default("") // opsional, maks 120 karakter
+  notes       String   @default("") // opsional, maks 300 karakter
+  scheduledAt DateTime // jadwal janji temu
+  status      String   @default("TERJADWAL") // TERJADWAL | SELESAI | DIBATALKAN
+  mpAwarded   Int      @default(0) // mP yang diberikan saat dibuat (rekam jejak)
+  day         String // "YYYY-MM-DD" WIB — hari pembuatan (cap harian)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, day])
+  @@index([userId, scheduledAt])
+}
+
+// ===================== HYBRID MATRIX SPILLOVER 3 FASE (Task 82) =====================
+// Pohon posisi biner (KIRI/KANAN) global. Pendaftaran pengguna baru otomatis
+// ditempatkan dengan spillover BFS di bawah subtree pengundang (referral),
+// atau di bawah akar bila tanpa pengundang. Jabatan naik otomatis mengikuti
+// tangga 3 fase (lib/matrix.ts) dari jumlah downline kumulatif:
+//   Fase 1: >=10 = Training 1, >=100 = Training 2 (lulus -> Fase 2)
+//   Fase 2: counter fase (total - phase2Base) >= 2/4/8/.../131.072
+//           = Magang 1 s.d. Supervisor (lulus -> Fase 3)
+//   Fase 3: counter fase (total - phase3Base) >= 2/4/8/.../131.072
+//           = Manager 1 s.d. President Director
+// Lihat & kelola: khusus SUPER_ADMIN & ADMIN (API dijaga requireRole).
+model MatrixNode {
+  id            String       @id @default(cuid())
+  userId        String       @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sponsorId     String? // pengundang langsung (id User) — null = penempatan global
+  parentId      String? // posisi induk spillover — null hanya untuk akar
+  parent        MatrixNode?  @relation("MatrixTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children      MatrixNode[] @relation("MatrixTree")
+  position      String       @default("KIRI") // KIRI | KANAN
+  phase         Int          @default(1) // fase jabatan aktif: 1 | 2 | 3
+  depth         Int          @default(0) // kedalaman dari akar (akar = 0)
+  downlineTotal Int          @default(0) // cache: seluruh keturunan di bawah node ini
+  phase2Base    Int          @default(0) // downlineTotal saat lulus Fase 1 (basis counter Fase 2)
+  phase3Base    Int          @default(0) // downlineTotal saat lulus Fase 2 (basis counter Fase 3)
+  jabatan       String       @default("Anggota") // jabatan aktif saat ini
+  createdAt     DateTime     @default(now())
+
+  @@index([parentId])
+  @@index([depth])
+  @@index([jabatan])
+}

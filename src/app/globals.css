@@ -1,0 +1,266 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ===================== PALET MERAH MAROON (Task 50) =====================
+   Skala maroon khusus aplikasi — menggantikan hijau (emerald/teal/green)
+   sebagai warna merek. #8f2b3b (maroon-700) = primary terang,
+   #ab3648 (maroon-600) = primary gelap. */
+@theme {
+  --color-maroon-50: #fcf3f5;
+  --color-maroon-100: #f9e4e8;
+  --color-maroon-200: #f2ccd3;
+  --color-maroon-300: #e7a5b0;
+  --color-maroon-400: #d87a89;
+  --color-maroon-500: #c45364;
+  --color-maroon-600: #a83a4c;
+  --color-maroon-700: #8f2b3b;
+  --color-maroon-800: #742431;
+  --color-maroon-900: #5e2029;
+  --color-maroon-950: #350e15;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: #f0f2f5;
+  --foreground: #111b21;
+  --card: #ffffff;
+  --card-foreground: #111b21;
+  --popover: #ffffff;
+  --popover-foreground: #111b21;
+  --primary: #8f2b3b;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f2f5;
+  --secondary-foreground: #111b21;
+  --muted: #f0f2f5;
+  --muted-foreground: #667781;
+  --accent: #f7e9eb;
+  --accent-foreground: #7c2534;
+  --destructive: #ea0038;
+  --border: #e9edef;
+  --input: #d1d7db;
+  --ring: #8f2b3b;
+  --chart-1: #8f2b3b;
+  --chart-2: #f2a33c;
+  --chart-3: #7a6ff0;
+  --chart-4: #64748b;
+  --chart-5: #3ba9e0;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111b21;
+  --sidebar-primary: #8f2b3b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f2f5;
+  --sidebar-accent-foreground: #111b21;
+  --sidebar-border: #e9edef;
+  --sidebar-ring: #8f2b3b;
+}
+
+/* Palet gelap WhatsApp (mode malam) — primary merah maroon #ab3648 */
+.dark {
+  color-scheme: dark;
+  --background: #0b141a;
+  --foreground: #e9edef;
+  --card: #111b21;
+  --card-foreground: #e9edef;
+  --popover: #233138;
+  --popover-foreground: #e9edef;
+  --primary: #ab3648;
+  --primary-foreground: #ffffff;
+  --secondary: #202c33;
+  --secondary-foreground: #e9edef;
+  --muted: #202c33;
+  --muted-foreground: #8696a0;
+  --accent: #2a3942;
+  --accent-foreground: #e9edef;
+  --destructive: #f15c6d;
+  --border: #2f3b43;
+  --input: #2a3942;
+  --ring: #ab3648;
+  --chart-1: #ab3648;
+  --chart-2: #f2a33c;
+  --chart-3: #7a6ff0;
+  --chart-4: #94a3b8;
+  --chart-5: #3ba9e0;
+  --sidebar: #111b21;
+  --sidebar-foreground: #e9edef;
+  --sidebar-primary: #ab3648;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #202c33;
+  --sidebar-accent-foreground: #e9edef;
+  --sidebar-border: #2f3b43;
+  --sidebar-ring: #ab3648;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ---------- WhatsApp-style utilities ---------- */
+.wa-chat-bg {
+  background-color: #efeae2;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1.2px),
+    radial-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1.2px);
+  background-size: 26px 26px, 26px 26px;
+  background-position: 0 0, 13px 13px;
+}
+
+.bubble-out {
+  background: #f9e3e7;
+  border-radius: 10px 2px 10px 10px;
+}
+.bubble-in {
+  background: #ffffff;
+  border-radius: 2px 10px 10px 10px;
+}
+
+.wa-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d7db transparent;
+}
+.wa-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.wa-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d7db;
+  border-radius: 999px;
+}
+.wa-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wa-tick-read {
+  color: #53bdeb;
+}
+
+@keyframes wa-recording {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+.wa-rec-dot {
+  animation: wa-recording 1s ease-in-out infinite;
+}
+
+@keyframes wa-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(143, 43, 59, 0.45); }
+  70% { box-shadow: 0 0 0 18px rgba(143, 43, 59, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(143, 43, 59, 0); }
+}
+.wa-pulse {
+  animation: wa-pulse-ring 1.6s ease-out infinite;
+}
+
+.wa-story-ring {
+  background: linear-gradient(135deg, #8f2b3b, #7a6ff0 60%, #e5567a);
+}
+
+/* ---------- Pop poin mP (badge "Poin Menonton" Beranda) ---------- */
+@keyframes mp-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(0.7); }
+  18% { opacity: 1; transform: translateY(0) scale(1.15); }
+  35% { transform: scale(1); }
+  75% { opacity: 1; transform: translateY(-4px); }
+  100% { opacity: 0; transform: translateY(-16px) scale(0.95); }
+}
+.animate-mp-pop {
+  animation: mp-pop 1.8s ease-out forwards;
+}
+
+/* ---------- Mode Gelap: padanan gelap utilitas WhatsApp ---------- */
+.dark .wa-chat-bg {
+  background-color: #0b141a;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1.2px),
+    radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1.2px);
+  background-size: 26px 26px, 26px 26px;
+  background-position: 0 0, 13px 13px;
+}
+.dark .bubble-out {
+  background: #5b2231;
+}
+.dark .bubble-in {
+  background: #202c33;
+}
+.dark .wa-scrollbar {
+  scrollbar-color: #374248 transparent;
+}
+.dark .wa-scrollbar::-webkit-scrollbar-thumb {
+  background: #374248;
+}
+
+/* ---------- Mode Hemat (lite): matikan animasi, transisi, blur & bayangan ----------
+   Kelas `.lite` dipasang di <html> oleh DisplayPrefsSync (zustand persist).
+   Ring fokus (aksesibilitas) TIDAK dimatikan — hanya utility .shadow-* bawaan Tailwind. */
+.lite *,
+.lite *::before,
+.lite *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  backdrop-filter: none !important;
+}
+.lite .shadow-xs,
+.lite .shadow-sm,
+.lite .shadow,
+.lite .shadow-md,
+.lite .shadow-lg,
+.lite .shadow-xl,
+.lite .shadow-2xl {
+  box-shadow: none !important;
+}
+.lite .wa-pulse,
+.lite .wa-rec-dot,
+.lite .animate-ping,
+.lite .animate-pulse,
+.lite .animate-bounce,
+.lite .animate-spin {
+  animation: none !important;
+}
+.lite .animate-spin {
+  opacity: 0.7;
+}

@@ -1,0 +1,1056 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useState } from "react";
+     4→import type { LucideIcon } from "lucide-react";
+     5→import {
+     6→  Check,
+     7→  Compass,
+     8→  Loader2,
+     9→  Megaphone,
+    10→  MessagesSquare,
+    11→  MoreVertical,
+    12→  PencilLine,
+    13→  Plus,
+    14→  Send,
+    15→  ShieldCheck,
+    16→  Trash2,
+    17→  UserPlus,
+    18→  Users,
+    19→  UsersRound,
+    20→} from "lucide-react";
+    21→import { cn, colorOf, getInitials } from "@/lib/wa-utils";
+    22→import { useToast } from "@/hooks/use-toast";
+    23→import { Button } from "@/components/ui/button";
+    24→import { Badge } from "@/components/ui/badge";
+    25→import { Card, CardContent } from "@/components/ui/card";
+    26→import { Input } from "@/components/ui/input";
+    27→import { Label } from "@/components/ui/label";
+    28→import { Textarea } from "@/components/ui/textarea";
+    29→import { Skeleton } from "@/components/ui/skeleton";
+    30→import {
+    31→  Dialog,
+    32→  DialogContent,
+    33→  DialogDescription,
+    34→  DialogFooter,
+    35→  DialogHeader,
+    36→  DialogTitle,
+    37→} from "@/components/ui/dialog";
+    38→import {
+    39→  AlertDialog,
+    40→  AlertDialogAction,
+    41→  AlertDialogCancel,
+    42→  AlertDialogContent,
+    43→  AlertDialogDescription,
+    44→  AlertDialogFooter,
+    45→  AlertDialogHeader,
+    46→  AlertDialogTitle,
+    47→} from "@/components/ui/alert-dialog";
+    48→import {
+    49→  DropdownMenu,
+    50→  DropdownMenuContent,
+    51→  DropdownMenuItem,
+    52→  DropdownMenuSeparator,
+    53→  DropdownMenuTrigger,
+    54→} from "@/components/ui/dropdown-menu";
+    55→
+    56→type GroupT = { id: string; name: string; members: number; description: string; chatId?: string };
+    57→
+    58→type CommunityT = {
+    59→  id: string;
+    60→  name: string;
+    61→  description: string;
+    62→  colorKey: string;
+    63→  memberCount: number;
+    64→  announcement: string;
+    65→  groups: GroupT[];
+    66→  isMine: boolean; // milik sesi yang masuk (Task 46)
+    67→  canManage: boolean; // pemilik atau Super Admin (Task 46)
+    68→};
+    69→
+    70→/** Bentuk mentah dari API: groups berupa string JSON; flag boleh absen pada respons parsial. */
+    71→type CommunityRaw = Omit<CommunityT, "groups" | "isMine" | "canManage"> & {
+    72→  groups: string;
+    73→  isMine?: boolean;
+    74→  canManage?: boolean;
+    75→};
+    76→
+    77→function parseGroups(raw: string): GroupT[] {
+    78→  try {
+    79→    const v = JSON.parse(raw);
+    80→    return Array.isArray(v) ? (v as GroupT[]) : [];
+    81→  } catch {
+    82→    return [];
+    83→  }
+    84→}
+    85→
+    86→function toCommunity(raw: CommunityRaw): CommunityT {
+    87→  return { ...raw, groups: parseGroups(raw.groups), isMine: !!raw.isMine, canManage: !!raw.canManage };
+    88→}
+    89→
+    90→function fmtCount(n: number): string {
+    91→  try {
+    92→    return new Intl.NumberFormat("id-ID", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+    93→  } catch {
+    94→    return String(n);
+    95→  }
+    96→}
+    97→
+    98→// ---------- Warna hero komunitas (gradasi per colorKey) ----------
+    99→const HERO_GRADIENTS: Record<string, string> = {
+   100→  emerald: "from-emerald-600 via-emerald-500 to-teal-600",
+   101→  green: "from-green-600 via-green-500 to-emerald-600",
+   102→  teal: "from-teal-600 via-teal-500 to-cyan-700",
+   103→  cyan: "from-cyan-600 via-cyan-500 to-sky-700",
+   104→  purple: "from-purple-600 via-purple-500 to-violet-700",
+   105→  violet: "from-violet-600 via-violet-500 to-purple-700",
+   106→  amber: "from-amber-500 via-amber-400 to-orange-500",
+   107→  orange: "from-orange-500 via-orange-400 to-amber-600",
+   108→  pink: "from-pink-500 via-pink-400 to-rose-500",
+   109→  rose: "from-rose-500 via-rose-400 to-pink-600",
+   110→  red: "from-red-500 via-red-400 to-rose-600",
+   111→  lime: "from-lime-600 via-lime-500 to-green-600",
+   112→};
+   113→
+   114→function heroGradient(key?: string | null): string {
+   115→  return HERO_GRADIENTS[key ?? "teal"] ?? HERO_GRADIENTS.teal;
+   116→}
+   117→
+   118→const COLOR_OPTIONS = ["teal", "emerald", "green", "cyan", "violet", "purple", "amber", "orange", "pink", "rose"] as const;
+   119→
+   120→function SectionTitle({ id, icon: Icon, children }: { id: string; icon?: LucideIcon; children: React.ReactNode }) {
+   121→  return (
+   122→    <h2
+   123→      id={id}
+   124→      className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+   125→    >
+   126→      {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden /> : null}
+   127→      {children}
+   128→    </h2>
+   129→  );
+   130→}
+   131→
+   132→function StatTile({ icon: Icon, label, value, tile }: { icon: LucideIcon; label: string; value: string; tile: string }) {
+   133→  return (
+   134→    <Card>
+   135→      <CardContent className="flex items-center gap-1.5 p-3 md:gap-3 md:p-4">
+   136→        <div
+   137→          className={cn(
+   138→            "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:h-10 md:w-10 md:rounded-xl",
+   139→            tile
+   140→          )}
+   141→          aria-hidden
+   142→        >
+   143→          <Icon className="h-3.5 w-3.5 md:h-5 md:w-5" />
+   144→        </div>
+   145→        <div className="min-w-0">
+   146→          <p className="truncate text-base font-bold leading-tight md:text-xl">{value}</p>
+   147→          <p className="truncate text-[10px] text-muted-foreground md:text-[11px]">{label}</p>
+   148→        </div>
+   149→      </CardContent>
+   150→    </Card>
+   151→  );
+   152→}
+   153→
+   154→/** Dialog Buat/Edit Komunitas — satu form untuk dua mode, lengkap pratinjau avatar langsung (Task 46). */
+   155→function CommunityFormDialog({
+   156→  community,
+   157→  open,
+   158→  onOpenChange,
+   159→  onSaved,
+   160→}: {
+   161→  community: CommunityT | null; // null = mode buat
+   162→  open: boolean;
+   163→  onOpenChange: (open: boolean) => void;
+   164→  onSaved: (community: CommunityT) => void;
+   165→}) {
+   166→  const { toast } = useToast();
+   167→  const editing = community !== null;
+   168→  const [name, setName] = useState("");
+   169→  const [description, setDescription] = useState("");
+   170→  const [colorKey, setColorKey] = useState<string>("teal");
+   171→  const [saving, setSaving] = useState(false);
+   172→
+   173→  useEffect(() => {
+   174→    if (open) {
+   175→      setName(community?.name ?? "");
+   176→      setDescription(community?.description ?? "");
+   177→      setColorKey(community?.colorKey ?? "teal");
+   178→    }
+   179→  }, [open, community]);
+   180→
+   181→  async function save() {
+   182→    if (saving) return;
+   183→    setSaving(true);
+   184→    try {
+   185→      const res = await fetch(editing ? `/api/communities/${community.id}` : "/api/communities", {
+   186→        method: editing ? "PATCH" : "POST",
+   187→        headers: { "Content-Type": "application/json" },
+   188→        cache: "no-store",
+   189→        body: JSON.stringify({ name: name.trim(), description: description.trim(), colorKey }),
+   190→      });
+   191→      const data = await res.json();
+   192→      if (!res.ok || !data?.community) {
+   193→        throw new Error(data?.error || (editing ? "Gagal menyimpan perubahan" : "Gagal membuat komunitas"));
+   194→      }
+   195→      onSaved(toCommunity(data.community as CommunityRaw));
+   196→      toast({
+   197→        title: editing ? "Komunitas diperbarui" : "Komunitas dibuat",
+   198→        description: editing
+   199→          ? `Perubahan pada "${name.trim()}" tersimpan.`
+   200→          : `Komunitas "${name.trim()}" tersimpan dan siap digunakan.`,
+   201→      });
+   202→      onOpenChange(false);
+   203→    } catch (e) {
+   204→      toast({
+   205→        title: editing ? "Gagal menyimpan perubahan" : "Gagal membuat komunitas",
+   206→        description: e instanceof Error ? e.message : "Silakan coba lagi.",
+   207→        variant: "destructive",
+   208→      });
+   209→    } finally {
+   210→      setSaving(false);
+   211→    }
+   212→  }
+   213→
+   214→  return (
+   215→    <Dialog open={open} onOpenChange={onOpenChange}>
+   216→      <DialogContent className="sm:max-w-md">
+   217→        <DialogHeader>
+   218→          <DialogTitle className="flex items-center gap-2">
+   219→            {editing ? <PencilLine className="h-5 w-5 text-primary" /> : <Users className="h-5 w-5 text-primary" />}
+   220→            {editing ? "Edit Komunitas" : "Buat Komunitas"}
+   221→          </DialogTitle>
+   222→          <DialogDescription>
+   223→            {editing
+   224→              ? "Perbarui nama, deskripsi, atau warna komunitas."
+   225→              : "Satukan beberapa grup terkait bisnis dalam satu komunitas."}
+   226→          </DialogDescription>
+   227→        </DialogHeader>
+   228→        <div className="space-y-3.5 py-1">
+   229→          {/* Pratinjau langsung */}
+   230→          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 p-3">
+   231→            <div
+   232→              className={cn(
+   233→                "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br text-white",
+   234→                heroGradient(colorKey)
+   235→              )}
+   236→              aria-hidden
+   237→            >
+   238→              {name.trim() ? <span className="text-sm font-bold">{getInitials(name)}</span> : <Users className="h-5 w-5" />}
+   239→            </div>
+   240→            <div className="min-w-0">
+   241→              <p className="truncate text-sm font-semibold">{name.trim() || "Nama komunitas"}</p>
+   242→              <p className="text-[11px] text-muted-foreground">Pratinjau avatar komunitas</p>
+   243→            </div>
+   244→          </div>
+   245→          <div className="space-y-1.5">
+   246→            <Label htmlFor="community-name">Nama komunitas</Label>
+   247→            <Input
+   248→              id="community-name"
+   249→              value={name}
+   250→              onChange={(e) => setName(e.target.value)}
+   251→              maxLength={80}
+   252→              placeholder="cth. Komunitas Pelanggan IndiGoo"
+   253→            />
+   254→          </div>
+   255→          <div className="space-y-1.5">
+   256→            <Label htmlFor="community-desc">Deskripsi</Label>
+   257→            <Textarea
+   258→              id="community-desc"
+   259→              value={description}
+   260→              onChange={(e) => setDescription(e.target.value)}
+   261→              rows={3}
+   262→              maxLength={300}
+   263→              placeholder="Untuk apa komunitas ini?"
+   264→            />
+   265→          </div>
+   266→          <div className="space-y-1.5">
+   267→            <Label>Warna komunitas</Label>
+   268→            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Pilih warna komunitas">
+   269→              {COLOR_OPTIONS.map((c) => (
+   270→                <button
+   271→                  key={c}
+   272→                  type="button"
+   273→                  role="radio"
+   274→                  aria-checked={colorKey === c}
+   275→                  aria-label={`Warna ${c}`}
+   276→                  title={c.charAt(0).toUpperCase() + c.slice(1)}
+   277→                  onClick={() => setColorKey(c)}
+   278→                  className={cn(
+   279→                    "flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all",
+   280→                    colorOf(c).bg,
+   281→                    colorKey === c
+   282→                      ? "scale-110 border-foreground/70 shadow-md"
+   283→                      : "border-transparent hover:scale-105 hover:border-border"
+   284→                  )}
+   285→                >
+   286→                  {colorKey === c ? <Check className="h-4 w-4 text-white" aria-hidden /> : null}
+   287→                </button>
+   288→              ))}
+   289→            </div>
+   290→          </div>
+   291→        </div>
+   292→        <DialogFooter>
+   293→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+   294→            Batal
+   295→          </Button>
+   296→          <Button onClick={() => void save()} disabled={saving || name.trim().length === 0}>
+   297→            {saving ? (
+   298→              <Loader2 className="h-4 w-4 animate-spin" />
+   299→            ) : editing ? (
+   300→              <PencilLine className="h-4 w-4" />
+   301→            ) : (
+   302→              <UserPlus className="h-4 w-4" />
+   303→            )}
+   304→            {editing ? "Simpan Perubahan" : "Buat"}
+   305→          </Button>
+   306→        </DialogFooter>
+   307→      </DialogContent>
+   308→    </Dialog>
+   309→  );
+   310→}
+   311→
+   312→/** Dialog edit pengumuman komunitas (pemilik/Super Admin). */
+   313→function EditAnnouncementDialog({
+   314→  community,
+   315→  open,
+   316→  onOpenChange,
+   317→  onSaved,
+   318→}: {
+   319→  community: CommunityT;
+   320→  open: boolean;
+   321→  onOpenChange: (open: boolean) => void;
+   322→  onSaved: (updated: CommunityT) => void;
+   323→}) {
+   324→  const { toast } = useToast();
+   325→  const [text, setText] = useState(community.announcement);
+   326→  const [saving, setSaving] = useState(false);
+   327→
+   328→  useEffect(() => {
+   329→    if (open) setText(community.announcement);
+   330→  }, [open, community.announcement]);
+   331→
+   332→  async function save() {
+   333→    setSaving(true);
+   334→    try {
+   335→      const res = await fetch(`/api/communities/${community.id}`, {
+   336→        method: "PATCH",
+   337→        headers: { "Content-Type": "application/json" },
+   338→        cache: "no-store",
+   339→        body: JSON.stringify({ announcement: text.trim() }),
+   340→      });
+   341→      const data = await res.json();
+   342→      if (!res.ok || !data?.community) throw new Error(data?.error || "Gagal menyimpan pengumuman");
+   343→      onSaved(toCommunity(data.community as CommunityRaw));
+   344→      toast({ title: "Pengumuman diperbarui", description: `Pengumuman "${community.name}" sudah diperbarui.` });
+   345→      onOpenChange(false);
+   346→    } catch (e) {
+   347→      toast({
+   348→        title: "Gagal menyimpan pengumuman",
+   349→        description: e instanceof Error ? e.message : "Silakan coba lagi.",
+   350→        variant: "destructive",
+   351→      });
+   352→    } finally {
+   353→      setSaving(false);
+   354→    }
+   355→  }
+   356→
+   357→  return (
+   358→    <Dialog open={open} onOpenChange={onOpenChange}>
+   359→      <DialogContent className="sm:max-w-md">
+   360→        <DialogHeader>
+   361→          <DialogTitle className="flex items-center gap-2">
+   362→            <Megaphone className="h-5 w-5 text-amber-500" />
+   363→            Edit Pengumuman
+   364→          </DialogTitle>
+   365→          <DialogDescription>Pengumuman akan tampil di halaman komunitas {community.name}.</DialogDescription>
+   366→        </DialogHeader>
+   367→        <Textarea
+   368→          value={text}
+   369→          onChange={(e) => setText(e.target.value)}
+   370→          rows={4}
+   371→          maxLength={1000}
+   372→          placeholder="Tulis pengumuman untuk anggota komunitas…"
+   373→          aria-label="Isi pengumuman komunitas"
+   374→        />
+   375→        <DialogFooter>
+   376→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+   377→            Batal
+   378→          </Button>
+   379→          <Button onClick={save} disabled={saving}>
+   380→            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />}
+   381→            Simpan Pengumuman
+   382→          </Button>
+   383→        </DialogFooter>
+   384→      </DialogContent>
+   385→    </Dialog>
+   386→  );
+   387→}
+   388→
+   389→/** Dialog kirim pengumuman ke satu grup komunitas — pengumuman NYATA via chat grup. */
+   390→function SendGroupAnnouncementDialog({
+   391→  community,
+   392→  group,
+   393→  open,
+   394→  onOpenChange,
+   395→  onAnnounced,
+   396→}: {
+   397→  community: CommunityT;
+   398→  group: GroupT | null;
+   399→  open: boolean;
+   400→  onOpenChange: (open: boolean) => void;
+   401→  onAnnounced: (updated: CommunityT) => void;
+   402→}) {
+   403→  const { toast } = useToast();
+   404→  const [msg, setMsg] = useState("");
+   405→  const [sending, setSending] = useState(false);
+   406→
+   407→  async function send() {
+   408→    if (!group || sending) return;
+   409→    setSending(true);
+   410→    try {
+   411→      const res = await fetch(`/api/communities/${community.id}/announce`, {
+   412→        method: "POST",
+   413→        headers: { "Content-Type": "application/json" },
+   414→        body: JSON.stringify({ groupId: group.id, text: msg.trim() }),
+   415→      });
+   416→      const data = await res.json();
+   417→      if (!res.ok || !data?.message) throw new Error(data?.error || "Gagal mengirim pengumuman");
+   418→      if (data.community) onAnnounced(toCommunity(data.community as CommunityRaw));
+   419→      toast({
+   420→        title: "Pengumuman terkirim",
+   421→        description: data.created
+   422→          ? `Chat grup "${group.name}" dibuat otomatis dan pengumuman masuk ke chat tersebut.`
+   423→          : `Pengumuman terkirim ke grup "${group.name}" — buka tab Chat untuk melihatnya.`,
+   424→      });
+   425→      setMsg("");
+   426→      onOpenChange(false);
+   427→    } catch (e) {
+   428→      toast({
+   429→        title: "Gagal mengirim pengumuman",
+   430→        description: e instanceof Error ? e.message : "Silakan coba lagi.",
+   431→        variant: "destructive",
+   432→      });
+   433→    } finally {
+   434→      setSending(false);
+   435→    }
+   436→  }
+   437→
+   438→  return (
+   439→    <Dialog
+   440→      open={open}
+   441→      onOpenChange={(v) => {
+   442→        if (!v) setMsg("");
+   443→        onOpenChange(v);
+   444→      }}
+   445→    >
+   446→      <DialogContent className="sm:max-w-md">
+   447→        <DialogHeader>
+   448→          <DialogTitle className="flex items-center gap-2">
+   449→            <Send className="h-5 w-5 text-primary" />
+   450→            Kirim Pengumuman ke Grup
+   451→          </DialogTitle>
+   452→          <DialogDescription>
+   453→            {group
+   454→              ? `Grup "${group.name}" · ${community.name} — pengumuman dikirim sebagai pesan ke chat grup.`
+   455→              : ""}
+   456→          </DialogDescription>
+   457→        </DialogHeader>
+   458→        <Textarea
+   459→          value={msg}
+   460→          onChange={(e) => setMsg(e.target.value)}
+   461→          rows={4}
+   462→          maxLength={2000}
+   463→          placeholder="Tulis pengumuman ke grup…"
+   464→          aria-label="Isi pengumuman grup"
+   465→        />
+   466→        <DialogFooter>
+   467→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>
+   468→            Batal
+   469→          </Button>
+   470→          <Button onClick={() => void send()} disabled={sending || msg.trim().length === 0}>
+   471→            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+   472→            Kirim
+   473→          </Button>
+   474→        </DialogFooter>
+   475→      </DialogContent>
+   476→    </Dialog>
+   477→  );
+   478→}
+   479→
+   480→/** Dialog tambah grup baru ke dalam komunitas. */
+   481→function AddGroupDialog({
+   482→  community,
+   483→  open,
+   484→  onOpenChange,
+   485→  onAdded,
+   486→}: {
+   487→  community: CommunityT;
+   488→  open: boolean;
+   489→  onOpenChange: (open: boolean) => void;
+   490→  onAdded: (updated: CommunityT) => void;
+   491→}) {
+   492→  const { toast } = useToast();
+   493→  const [name, setName] = useState("");
+   494→  const [desc, setDesc] = useState("");
+   495→  const [adding, setAdding] = useState(false);
+   496→
+   497→  async function add() {
+   498→    if (adding) return;
+   499→    setAdding(true);
+   500→    try {
+   501→      const res = await fetch(`/api/communities/${community.id}/groups`, {
+   502→        method: "POST",
+   503→        headers: { "Content-Type": "application/json" },
+   504→        body: JSON.stringify({ name: name.trim(), description: desc.trim() }),
+   505→      });
+   506→      const data = await res.json();
+   507→      if (!res.ok || !data?.community) throw new Error(data?.error || "Gagal menambah grup");
+   508→      onAdded(toCommunity(data.community as CommunityRaw));
+   509→      toast({ title: "Grup ditambahkan", description: `Grup "${name.trim()}" masuk ke komunitas ${community.name}.` });
+   510→      setName("");
+   511→      setDesc("");
+   512→      onOpenChange(false);
+   513→    } catch (e) {
+   514→      toast({
+   515→        title: "Gagal menambah grup",
+   516→        description: e instanceof Error ? e.message : "Silakan coba lagi.",
+   517→        variant: "destructive",
+   518→      });
+   519→    } finally {
+   520→      setAdding(false);
+   521→    }
+   522→  }
+   523→
+   524→  return (
+   525→    <Dialog
+   526→      open={open}
+   527→      onOpenChange={(v) => {
+   528→        if (!v) {
+   529→          setName("");
+   530→          setDesc("");
+   531→        }
+   532→        onOpenChange(v);
+   533→      }}
+   534→    >
+   535→      <DialogContent className="sm:max-w-md">
+   536→        <DialogHeader>
+   537→          <DialogTitle className="flex items-center gap-2">
+   538→            <Plus className="h-5 w-5 text-primary" />
+   539→            Tambah Grup
+   540→          </DialogTitle>
+   541→          <DialogDescription>Grup baru masuk ke komunitas {community.name}.</DialogDescription>
+   542→        </DialogHeader>
+   543→        <div className="space-y-3 py-1">
+   544→          <div className="space-y-1.5">
+   545→            <Label htmlFor="group-name">Nama grup</Label>
+   546→            <Input
+   547→              id="group-name"
+   548→              value={name}
+   549→              onChange={(e) => setName(e.target.value)}
+   550→              maxLength={80}
+   551→              placeholder="cth. Pelanggan Setia"
+   552→            />
+   553→          </div>
+   554→          <div className="space-y-1.5">
+   555→            <Label htmlFor="group-desc">Deskripsi (opsional)</Label>
+   556→            <Input
+   557→              id="group-desc"
+   558→              value={desc}
+   559→              onChange={(e) => setDesc(e.target.value)}
+   560→              maxLength={200}
+   561→              placeholder="cth. Untuk promo bulanan"
+   562→            />
+   563→          </div>
+   564→        </div>
+   565→        <DialogFooter>
+   566→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={adding}>
+   567→            Batal
+   568→          </Button>
+   569→          <Button onClick={() => void add()} disabled={adding || name.trim().length === 0}>
+   570→            {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+   571→            Tambah
+   572→          </Button>
+   573→        </DialogFooter>
+   574→      </DialogContent>
+   575→    </Dialog>
+   576→  );
+   577→}
+   578→
+   579→/** Dialog konfirmasi hapus komunitas (Task 46). */
+   580→function DeleteCommunityDialog({
+   581→  community,
+   582→  open,
+   583→  onOpenChange,
+   584→  onDeleted,
+   585→}: {
+   586→  community: CommunityT;
+   587→  open: boolean;
+   588→  onOpenChange: (open: boolean) => void;
+   589→  onDeleted: (id: string) => void;
+   590→}) {
+   591→  const { toast } = useToast();
+   592→  const [deleting, setDeleting] = useState(false);
+   593→
+   594→  async function remove() {
+   595→    if (deleting) return;
+   596→    setDeleting(true);
+   597→    try {
+   598→      const res = await fetch(`/api/communities/${community.id}`, { method: "DELETE", cache: "no-store" });
+   599→      const data = await res.json();
+   600→      if (!res.ok || !data?.ok) throw new Error(data?.error || "Gagal menghapus komunitas");
+   601→      onDeleted(community.id);
+   602→      toast({
+   603→        title: "Komunitas dihapus",
+   604→        description: `"${community.name}"${
+   605→          data.deletedGroups ? ` beserta ${data.deletedGroups} grup di dalamnya` : ""
+   606→        } telah dihapus.`,
+   607→      });
+   608→      onOpenChange(false);
+   609→    } catch (e) {
+   610→      toast({
+   611→        title: "Gagal menghapus komunitas",
+   612→        description: e instanceof Error ? e.message : "Silakan coba lagi.",
+   613→        variant: "destructive",
+   614→      });
+   615→    } finally {
+   616→      setDeleting(false);
+   617→    }
+   618→  }
+   619→
+   620→  return (
+   621→    <AlertDialog open={open} onOpenChange={onOpenChange}>
+   622→      <AlertDialogContent>
+   623→        <AlertDialogHeader>
+   624→          <AlertDialogTitle>Hapus komunitas?</AlertDialogTitle>
+   625→          <AlertDialogDescription>
+   626→            Komunitas <span className="font-semibold text-foreground">“{community.name}”</span> beserta{" "}
+   627→            {community.groups.length} grup di dalamnya akan dihapus permanen. Chat grup yang sudah dibuat tidak ikut
+   628→            terhapus. Tindakan ini tidak dapat dibatalkan.
+   629→          </AlertDialogDescription>
+   630→        </AlertDialogHeader>
+   631→        <AlertDialogFooter>
+   632→          <AlertDialogCancel disabled={deleting}>Batal</AlertDialogCancel>
+   633→          <AlertDialogAction
+   634→            className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive"
+   635→            disabled={deleting}
+   636→            onClick={(e) => {
+   637→              e.preventDefault();
+   638→              void remove();
+   639→            }}
+   640→          >
+   641→            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+   642→            Hapus Komunitas
+   643→          </AlertDialogAction>
+   644→        </AlertDialogFooter>
+   645→      </AlertDialogContent>
+   646→    </AlertDialog>
+   647→  );
+   648→}
+   649→
+   650→/** Kartu komunitas premium: hero gradasi + avatar overlap + statistik + pengumuman + grup (Task 46). */
+   651→function CommunityCard({
+   652→  community,
+   653→  onUpdate,
+   654→  onDelete,
+   655→}: {
+   656→  community: CommunityT;
+   657→  onUpdate: (updated: CommunityT) => void;
+   658→  onDelete: (id: string) => void;
+   659→}) {
+   660→  const [profileOpen, setProfileOpen] = useState(false);
+   661→  const [annOpen, setAnnOpen] = useState(false);
+   662→  const [deleteOpen, setDeleteOpen] = useState(false);
+   663→  const [addGroupOpen, setAddGroupOpen] = useState(false);
+   664→  const [groupTarget, setGroupTarget] = useState<GroupT | null>(null);
+   665→  const grad = heroGradient(community.colorKey);
+   666→
+   667→  return (
+   668→    <div className="space-y-3">
+   669→      {/* ===== Kartu identitas (hero + avatar + statistik) ===== */}
+   670→      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+   671→        <div className="relative h-24 overflow-hidden md:h-28">
+   672→          <div className={cn("absolute inset-0 bg-gradient-to-br", grad)} aria-hidden />
+   673→          <div className="absolute -right-8 -top-12 h-32 w-32 rounded-full bg-white/10" aria-hidden />
+   674→          <div className="absolute right-14 top-4 h-12 w-12 rounded-full bg-white/10" aria-hidden />
+   675→          <div className="absolute -left-6 bottom-0 h-16 w-16 rounded-full bg-black/5" aria-hidden />
+   676→          {community.isMine ? (
+   677→            <Badge className="absolute left-4 top-3 z-10 border-0 bg-white/20 text-white backdrop-blur-sm">
+   678→              Komunitas Saya
+   679→            </Badge>
+   680→          ) : null}
+   681→          {community.canManage ? (
+   682→            <div className="absolute right-2.5 top-2.5 z-10">
+   683→              <DropdownMenu>
+   684→                <DropdownMenuTrigger asChild>
+   685→                  <Button
+   686→                    variant="ghost"
+   687→                    size="icon"
+   688→                    className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+   689→                    aria-label={`Menu komunitas ${community.name}`}
+   690→                  >
+   691→                    <MoreVertical className="h-4 w-4" aria-hidden />
+   692→                  </Button>
+   693→                </DropdownMenuTrigger>
+   694→                <DropdownMenuContent align="end" className="w-56">
+   695→                  <DropdownMenuItem className="gap-2" onSelect={() => setProfileOpen(true)}>
+   696→                    <PencilLine className="h-4 w-4" aria-hidden />
+   697→                    Edit Profil Komunitas
+   698→                  </DropdownMenuItem>
+   699→                  <DropdownMenuItem className="gap-2" onSelect={() => setAnnOpen(true)}>
+   700→                    <Megaphone className="h-4 w-4" aria-hidden />
+   701→                    Edit Pengumuman
+   702→                  </DropdownMenuItem>
+   703→                  <DropdownMenuSeparator />
+   704→                  <DropdownMenuItem
+   705→                    className="gap-2 text-destructive focus:text-destructive"
+   706→                    onSelect={() => setDeleteOpen(true)}
+   707→                  >
+   708→                    <Trash2 className="h-4 w-4" aria-hidden />
+   709→                    Hapus Komunitas
+   710→                  </DropdownMenuItem>
+   711→                </DropdownMenuContent>
+   712→              </DropdownMenu>
+   713→            </div>
+   714→          ) : null}
+   715→        </div>
+   716→
+   717→        <div className="px-4 pb-4 md:px-5">
+   718→          <div className="relative z-10 -mt-9 mb-2.5">
+   719→            <div
+   720→              className={cn(
+   721→                "flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-[0_0_0_4px_var(--card)]",
+   722→                grad
+   723→              )}
+   724→              aria-hidden
+   725→            >
+   726→              {getInitials(community.name) !== "?" ? (
+   727→                <span className="text-xl font-bold">{getInitials(community.name)}</span>
+   728→              ) : (
+   729→                <Users className="h-7 w-7" />
+   730→              )}
+   731→            </div>
+   732→          </div>
+   733→          <h3 className="text-lg font-bold tracking-tight">{community.name}</h3>
+   734→          {community.description ? (
+   735→            <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{community.description}</p>
+   736→          ) : null}
+   737→          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+   738→            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground">
+   739→              <Users className="h-3 w-3" aria-hidden />
+   740→              {fmtCount(community.memberCount)} anggota
+   741→            </span>
+   742→            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground">
+   743→              <MessagesSquare className="h-3 w-3" aria-hidden />
+   744→              {community.groups.length} grup
+   745→            </span>
+   746→            {community.isMine ? (
+   747→              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+   748→                <ShieldCheck className="h-3 w-3" aria-hidden />
+   749→                Pemilik
+   750→              </span>
+   751→            ) : null}
+   752→          </div>
+   753→        </div>
+   754→      </div>
+   755→
+   756→      {/* ===== Kartu pengumuman ===== */}
+   757→      <Card className="border-amber-200/60 bg-gradient-to-br from-amber-50/80 to-transparent dark:border-amber-500/20 dark:from-amber-500/5">
+   758→        <CardContent className="p-4 md:p-5">
+   759→          <div className="flex items-start gap-3">
+   760→            <div
+   761→              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm"
+   762→              aria-hidden
+   763→            >
+   764→              <Megaphone className="h-5 w-5" />
+   765→            </div>
+   766→            <div className="min-w-0 flex-1">
+   767→              <div className="flex flex-wrap items-center gap-2">
+   768→                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+   769→                  Pengumuman
+   770→                </p>
+   771→                <Badge
+   772→                  variant="secondary"
+   773→                  className="border-0 bg-amber-100 text-amber-700 text-[10px] dark:bg-amber-500/15 dark:text-amber-400"
+   774→                >
+   775→                  Admin
+   776→                </Badge>
+   777→              </div>
+   778→              {community.announcement ? (
+   779→                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{community.announcement}</p>
+   780→              ) : (
+   781→                <p className="mt-1 text-sm italic text-muted-foreground">
+   782→                  Belum ada pengumuman untuk komunitas ini.
+   783→                </p>
+   784→              )}
+   785→            </div>
+   786→            {community.canManage ? (
+   787→              <Button
+   788→                size="icon"
+   789→                variant="ghost"
+   790→                className="h-8 w-8 shrink-0 text-amber-600 hover:text-amber-700 dark:text-amber-400"
+   791→                onClick={() => setAnnOpen(true)}
+   792→                aria-label={`Edit pengumuman komunitas ${community.name}`}
+   793→              >
+   794→                <PencilLine className="h-4 w-4" aria-hidden />
+   795→              </Button>
+   796→            ) : null}
+   797→          </div>
+   798→        </CardContent>
+   799→      </Card>
+   800→
+   801→      {/* ===== Grup dalam komunitas ===== */}
+   802→      <div className="space-y-2.5">
+   803→        <div className="flex items-center justify-between gap-2">
+   804→          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+   805→            <MessagesSquare className="h-3.5 w-3.5" aria-hidden />
+   806→            Grup dalam komunitas ({community.groups.length})
+   807→          </p>
+   808→          <Button
+   809→            size="sm"
+   810→            variant="ghost"
+   811→            className="h-7 gap-1 text-xs text-primary hover:text-primary"
+   812→            onClick={() => setAddGroupOpen(true)}
+   813→          >
+   814→            <Plus className="h-3.5 w-3.5" aria-hidden />
+   815→            Tambah Grup
+   816→          </Button>
+   817→        </div>
+   818→        {community.groups.length === 0 ? (
+   819→          <p className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+   820→            Belum ada grup dalam komunitas ini.
+   821→          </p>
+   822→        ) : (
+   823→          <div className="grid gap-3 sm:grid-cols-2">
+   824→            {community.groups.map((g, i) => (
+   825→              <Card key={g.id} className="transition-shadow hover:shadow-md">
+   826→                <CardContent className="space-y-2.5 p-4">
+   827→                  <div className="flex items-center gap-2.5">
+   828→                    <div
+   829→                      className={cn(
+   830→                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white",
+   831→                        colorOf(community.colorKey).bg
+   832→                      )}
+   833→                      aria-hidden
+   834→                    >
+   835→                      <MessagesSquare className="h-4 w-4" />
+   836→                    </div>
+   837→                    <div className="min-w-0 flex-1">
+   838→                      <p className="truncate text-sm font-semibold">{g.name}</p>
+   839→                      <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   840→                        <Users className="h-3 w-3" aria-hidden />
+   841→                        {g.members.toLocaleString("id-ID")} anggota
+   842→                      </p>
+   843→                    </div>
+   844→                    {i === 0 ? (
+   845→                      <Badge
+   846→                        variant="secondary"
+   847→                        className="shrink-0 border-0 bg-amber-100 text-amber-700 text-[10px] dark:bg-amber-500/15 dark:text-amber-400"
+   848→                      >
+   849→                        <Megaphone className="mr-1 h-3 w-3" />
+   850→                        Pengumuman
+   851→                      </Badge>
+   852→                    ) : null}
+   853→                  </div>
+   854→                  <p className="line-clamp-2 text-xs text-muted-foreground">{g.description || "Tanpa deskripsi"}</p>
+   855→                  <Button
+   856→                    size="sm"
+   857→                    variant="outline"
+   858→                    className="w-full gap-1.5"
+   859→                    onClick={() => setGroupTarget(g)}
+   860→                    aria-label={`Kirim pengumuman ke grup ${g.name}`}
+   861→                  >
+   862→                    <Send className="h-3.5 w-3.5" aria-hidden />
+   863→                    Kirim Pengumuman
+   864→                  </Button>
+   865→                </CardContent>
+   866→              </Card>
+   867→            ))}
+   868→          </div>
+   869→        )}
+   870→      </div>
+   871→
+   872→      <CommunityFormDialog
+   873→        community={community}
+   874→        open={profileOpen}
+   875→        onOpenChange={setProfileOpen}
+   876→        onSaved={onUpdate}
+   877→      />
+   878→      <EditAnnouncementDialog community={community} open={annOpen} onOpenChange={setAnnOpen} onSaved={onUpdate} />
+   879→      <DeleteCommunityDialog community={community} open={deleteOpen} onOpenChange={setDeleteOpen} onDeleted={onDelete} />
+   880→      <AddGroupDialog community={community} open={addGroupOpen} onOpenChange={setAddGroupOpen} onAdded={onUpdate} />
+   881→      <SendGroupAnnouncementDialog
+   882→        community={community}
+   883→        group={groupTarget}
+   884→        open={groupTarget !== null}
+   885→        onOpenChange={(open) => !open && setGroupTarget(null)}
+   886→        onAnnounced={onUpdate}
+   887→      />
+   888→    </div>
+   889→  );
+   890→}
+   891→
+   892→export default function CommunityView() {
+   893→  const { toast } = useToast();
+   894→  const [communities, setCommunities] = useState<CommunityT[]>([]);
+   895→  const [loading, setLoading] = useState(true);
+   896→  const [createOpen, setCreateOpen] = useState(false);
+   897→
+   898→  const load = useCallback(async () => {
+   899→    try {
+   900→      const res = await fetch("/api/communities", { cache: "no-store" });
+   901→      const data = await res.json();
+   902→      if (!res.ok) throw new Error(data?.error || "Gagal memuat komunitas");
+   903→      setCommunities(((data.communities ?? []) as CommunityRaw[]).map(toCommunity));
+   904→    } catch (e) {
+   905→      toast({
+   906→        title: "Gagal memuat komunitas",
+   907→        description: e instanceof Error ? e.message : "Silakan muat ulang halaman.",
+   908→        variant: "destructive",
+   909→      });
+   910→    } finally {
+   911→      setLoading(false);
+   912→    }
+   913→  }, [toast]);
+   914→
+   915→  useEffect(() => {
+   916→    void load();
+   917→  }, [load]);
+   918→
+   919→  // Tombol ➕ di top bar mobile AppShell membuka dialog buat komunitas
+   920→  useEffect(() => {
+   921→    const openCreate = () => setCreateOpen(true);
+   922→    window.addEventListener("wa:community:create", openCreate);
+   923→    return () => window.removeEventListener("wa:community:create", openCreate);
+   924→  }, []);
+   925→
+   926→  /** Perbarui satu komunitas di state — flag isMine/canManage dipertahankan dari muatan awal. */
+   927→  const applyUpdate = useCallback((updated: CommunityT) => {
+   928→    setCommunities((prev) =>
+   929→      prev.map((x) => (x.id === updated.id ? { ...updated, isMine: x.isMine, canManage: x.canManage } : x))
+   930→    );
+   931→  }, []);
+   932→
+   933→  const handleDeleted = useCallback((id: string) => {
+   934→    setCommunities((prev) => prev.filter((x) => x.id !== id));
+   935→  }, []);
+   936→
+   937→  const mine = communities.filter((c) => c.isMine);
+   938→  const others = communities.filter((c) => !c.isMine);
+   939→  const totalGroups = communities.reduce((a, c) => a + c.groups.length, 0);
+   940→  const totalMembers = communities.reduce((a, c) => a + c.memberCount, 0);
+   941→
+   942→  return (
+   943→    <div className="flex h-full flex-col">
+   944→      {/* Header — hanya desktop; di mobile judul ada di top bar AppShell & ikon komunitas jadi tombol buat */}
+   945→      <header className="hidden h-14 shrink-0 items-center gap-2.5 border-b border-border bg-sidebar px-4 md:flex md:px-6">
+   946→        <Users className="h-5 w-5 text-primary" aria-hidden />
+   947→        <h1 className="text-base font-semibold">Komunitas</h1>
+   948→        {communities.length > 0 || !loading ? (
+   949→          <div className="ml-auto">
+   950→            <Button size="sm" onClick={() => setCreateOpen(true)}>
+   951→              <UserPlus className="h-4 w-4" />
+   952→              Buat Komunitas
+   953→            </Button>
+   954→          </div>
+   955→        ) : null}
+   956→      </header>
+   957→
+   958→      <div className="flex-1 overflow-y-auto wa-scrollbar">
+   959→        <div className="mx-auto w-full max-w-3xl p-4 md:p-6">
+   960→          {loading ? (
+   961→            <div className="space-y-4" aria-busy="true" aria-label="Memuat komunitas">
+   962→              <div className="grid grid-cols-3 gap-2.5 md:gap-3">
+   963→                <Skeleton className="h-[4.25rem] rounded-2xl" />
+   964→                <Skeleton className="h-[4.25rem] rounded-2xl" />
+   965→                <Skeleton className="h-[4.25rem] rounded-2xl" />
+   966→              </div>
+   967→              <Skeleton className="h-44 w-full rounded-2xl" />
+   968→              <Skeleton className="h-24 w-full rounded-2xl" />
+   969→              <div className="grid gap-3 sm:grid-cols-2">
+   970→                <Skeleton className="h-40 rounded-2xl" />
+   971→                <Skeleton className="h-40 rounded-2xl" />
+   972→              </div>
+   973→            </div>
+   974→          ) : communities.length === 0 ? (
+   975→            <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
+   976→              <div
+   977→                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg"
+   978→                aria-hidden
+   979→              >
+   980→                <Users className="h-8 w-8" />
+   981→              </div>
+   982→              <p className="text-base font-bold">Belum ada komunitas</p>
+   983→              <p className="mx-auto mb-5 mt-1 max-w-sm text-xs text-muted-foreground">
+   984→                Komunitas menyatukan beberapa grup terkait agar pengumuman &amp; diskusi lebih rapi.
+   985→              </p>
+   986→              <Button onClick={() => setCreateOpen(true)}>
+   987→                <UserPlus className="h-4 w-4" />
+   988→                Buat Komunitas
+   989→              </Button>
+   990→            </div>
+   991→          ) : (
+   992→            <div className="space-y-6">
+   993→              {/* Strip ringkasan */}
+   994→              <div className="grid grid-cols-3 gap-2 md:gap-3">
+   995→                <StatTile
+   996→                  icon={Users}
+   997→                  label="Komunitas"
+   998→                  value={fmtCount(communities.length)}
+   999→                  tile="bg-primary/10 text-primary"
+  1000→                />
+  1001→                <StatTile
+  1002→                  icon={MessagesSquare}
+  1003→                  label="Grup"
+  1004→                  value={fmtCount(totalGroups)}
+  1005→                  tile="bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"
+  1006→                />
+  1007→                <StatTile
+  1008→                  icon={UsersRound}
+  1009→                  label="Anggota"
+  1010→                  value={fmtCount(totalMembers)}
+  1011→                  tile="bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400"
+  1012→                />
+  1013→              </div>
+  1014→
+  1015→              {/* Tombol buat — mobile */}
+  1016→              <Button variant="outline" className="w-full md:hidden" onClick={() => setCreateOpen(true)}>
+  1017→                <Plus className="h-4 w-4" aria-hidden />
+  1018→                Buat Komunitas
+  1019→              </Button>
+  1020→
+  1021→              {mine.length > 0 ? (
+  1022→                <section aria-labelledby="sec-my-community" className="space-y-3">
+  1023→                  <SectionTitle id="sec-my-community" icon={ShieldCheck}>
+  1024→                    Komunitas Saya ({mine.length})
+  1025→                  </SectionTitle>
+  1026→                  {mine.map((c) => (
+  1027→                    <CommunityCard key={c.id} community={c} onUpdate={applyUpdate} onDelete={handleDeleted} />
+  1028→                  ))}
+  1029→                </section>
+  1030→              ) : null}
+  1031→
+  1032→              {others.length > 0 ? (
+  1033→                <section aria-labelledby="sec-other-community" className="space-y-3">
+  1034→                  <SectionTitle id="sec-other-community" icon={Compass}>
+  1035→                    Komunitas Lainnya ({others.length})
+  1036→                  </SectionTitle>
+  1037→                  {others.map((c) => (
+  1038→                    <CommunityCard key={c.id} community={c} onUpdate={applyUpdate} onDelete={handleDeleted} />
+  1039→                  ))}
+  1040→                </section>
+  1041→              ) : null}
+  1042→            </div>
+  1043→          )}
+  1044→        </div>
+  1045→      </div>
+  1046→
+  1047→      <CommunityFormDialog
+  1048→        community={null}
+  1049→        open={createOpen}
+  1050→        onOpenChange={setCreateOpen}
+  1051→        onSaved={(community) => setCommunities((prev) => [...prev, community])}
+  1052→      />
+  1053→    </div>
+  1054→  );
+  1055→}
+  1056→

@@ -1,0 +1,833 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useState, useSyncExternalStore } from "react";
+     4→import Link from "next/link";
+     5→import {
+     6→  MessageCircle,
+     7→  CircleDashed,
+     8→  Radio,
+     9→  Users,
+    10→  ShoppingBag,
+    11→  Tags,
+    12→  Megaphone,
+    13→  Bot,
+    14→  Store,
+    15→  Link2,
+    16→  TrendingUp,
+    17→  BadgeCheck,
+    18→  BarChart3,
+    19→  MonitorSmartphone,
+    20→  Settings,
+    21→  Menu,
+    22→  ShieldCheck,
+    23→  Info,
+    24→  Lock,
+    25→  LockOpen,
+    26→  MessageSquarePlus,
+    27→  UsersRound,
+    28→  Home,
+    29→  Phone,
+    30→  Building2,
+    31→  MoreVertical,
+    32→  Plus,
+    33→  CircleUserRound,
+    34→  RadioTower,
+    35→  LayoutGrid,
+    36→  ClipboardList,
+    37→  Zap,
+    38→  Star,
+    39→  SquareCheckBig,
+    40→  Bookmark,
+    41→  Check,
+    42→  CheckCheck,
+    43→  Leaf,
+    44→  LogOut,
+    45→  Loader2,
+    46→  Moon,
+    47→} from "lucide-react";
+    48→import { cn } from "@/lib/wa-utils";
+    49→import { roleLabel } from "@/lib/user";
+    50→import { useBusinessProfile, type BusinessInfo } from "@/lib/useBusinessProfile";
+    51→import { can, type Perm } from "@/lib/user";
+    52→import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+    53→import { Button } from "@/components/ui/button";
+    54→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+    55→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+    56→import { AuthProvider, useAuth } from "@/hooks/use-auth";
+    57→import { useTheme } from "next-themes";
+    58→import { useDisplayPrefs } from "@/lib/display-prefs";
+    59→import DisplayPrefsSync from "@/components/extras/DisplayPrefsSync";
+    60→import { LogoutButton, performLogout } from "@/components/extras/LogoutFlow";
+    61→import LoginScreen from "@/components/extras/LoginScreen";
+    62→import CreateSheet from "@/components/extras/CreateSheet";
+    63→import { ConfirmDialog } from "@/components/chat/ChatMenus";
+    64→import CartSheet from "@/components/business/CartSheet";
+    65→
+    66→import ChatsView from "@/components/views/ChatsView";
+    67→import IncomingCallCenter from "@/components/chat/IncomingCallCenter";
+    68→import BerandaView from "@/components/views/BerandaView";
+    69→import MarketplaceView from "@/components/views/MarketplaceView";
+    70→import CallsView from "@/components/views/CallsView";
+    71→import UsersView from "@/components/views/UsersView";
+    72→import StatusView from "@/components/views/StatusView";
+    73→import ChannelsView from "@/components/views/ChannelsView";
+    74→import CommunityView from "@/components/views/CommunityView";
+    75→import CatalogView from "@/components/views/CatalogView";
+    76→import LabelsView from "@/components/views/LabelsView";
+    77→import BroadcastView from "@/components/views/BroadcastView";
+    78→import AutoRepliesView from "@/components/views/AutoRepliesView";
+    79→import BusinessProfileView from "@/components/views/BusinessProfileView";
+    80→import LinkView from "@/components/views/LinkView";
+    81→import PromotionsView from "@/components/views/PromotionsView";
+    82→import VerificationView from "@/components/views/VerificationView";
+    83→import StatsView from "@/components/views/StatsView";
+    84→import DevicesView from "@/components/views/DevicesView";
+    85→import SettingsView from "@/components/views/SettingsView";
+    86→import { UserCog } from "lucide-react";
+    87→
+    88→export type ViewId =
+    89→  | "beranda"
+    90→  | "chats"
+    91→  | "calls"
+    92→  | "status"
+    93→  | "channels"
+    94→  | "community"
+    95→  | "catalog"
+    96→  | "marketplace"
+    97→  | "labels"
+    98→  | "broadcast"
+    99→  | "autoreplies"
+   100→  | "business-profile"
+   101→  | "link"
+   102→  | "promotions"
+   103→  | "verification"
+   104→  | "stats"
+   105→  | "devices"
+   106→  | "settings"
+   107→  | "users";
+   108→
+   109→const NAV: { group: string; items: { id: ViewId; label: string; icon: React.ElementType; perm?: Perm }[] }[] = [
+   110→  {
+   111→    group: "Komunikasi",
+   112→    items: [
+   113→      { id: "beranda", label: "Beranda", icon: Home },
+   114→      { id: "chats", label: "Chat", icon: MessageCircle },
+   115→      { id: "calls", label: "Panggilan", icon: Phone },
+   116→      { id: "status", label: "Status", icon: CircleDashed },
+   117→      { id: "channels", label: "Channel", icon: Radio },
+   118→      { id: "community", label: "Komunitas", icon: Users },
+   119→    ],
+   120→  },
+   121→  {
+   122→    group: "Toko",
+   123→    items: [
+   124→      { id: "marketplace", label: "Marketplace", icon: Store },
+   125→      { id: "catalog", label: "Katalog Produk", icon: ShoppingBag },
+   126→      { id: "labels", label: "Label Pelanggan", icon: Tags },
+   127→      { id: "broadcast", label: "Siaran", icon: Megaphone },
+   128→      { id: "autoreplies", label: "Pesan Otomatis", icon: Bot },
+   129→    ],
+   130→  },
+   131→  {
+   132→    group: "Bisnis",
+   133→    items: [
+   134→      { id: "business-profile", label: "Profil Bisnis", icon: Building2 },
+   135→      { id: "link", label: "Link Bisnis", icon: Link2 },
+   136→      { id: "promotions", label: "Promosi", icon: TrendingUp },
+   137→      { id: "verification", label: "Verifikasi Bisnis", icon: BadgeCheck },
+   138→    ],
+   139→  },
+   140→  {
+   141→    group: "Lainnya",
+   142→    items: [
+   143→      { id: "stats", label: "Statistik Pesan", icon: BarChart3 },
+   144→      { id: "devices", label: "Perangkat Tertaut", icon: MonitorSmartphone },
+   145→      { id: "settings", label: "Pengaturan", icon: Settings },
+   146→      { id: "users", label: "Manajemen Pengguna", icon: UserCog, perm: "users.manage" },
+   147→    ],
+   148→  },
+   149→];
+   150→
+   151→const VIEWS: Record<ViewId, React.ComponentType> = {
+   152→  beranda: BerandaView,
+   153→  chats: ChatsView,
+   154→  calls: CallsView,
+   155→  status: StatusView,
+   156→  channels: ChannelsView,
+   157→  community: CommunityView,
+   158→  catalog: CatalogView,
+   159→  marketplace: MarketplaceView,
+   160→  labels: LabelsView,
+   161→  broadcast: BroadcastView,
+   162→  autoreplies: AutoRepliesView,
+   163→  "business-profile": BusinessProfileView,
+   164→  link: LinkView,
+   165→  promotions: PromotionsView,
+   166→  verification: VerificationView,
+   167→  stats: StatsView,
+   168→  devices: DevicesView,
+   169→  settings: SettingsView,
+   170→  users: UsersView,
+   171→};
+   172→
+   173→/** Saring item nav berdasar izin peran pengguna aktif. */
+   174→function visibleNav(role: string | null | undefined) {
+   175→  return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || can(role, i.perm)) })).filter(
+   176→    (g) => g.items.length > 0
+   177→  );
+   178→}
+   179→
+   180→/** Ambil profil bisnis dari DB + ikut pembaruan realtime via event "wa:profile-updated". */
+   181→// (implementasi di src/lib/useBusinessProfile.ts — dipakai bersama ChatsView)
+   182→
+   183→/**
+   184→ * Header berlabel — hanya dipakai di drawer mobile (tidak memakan ruang permanen).
+   185→ * Menampilkan profil bisnis + akun yang sedang masuk beserta perannya.
+   186→ */
+   187→function BusinessHeader({ onNavigate, info }: { onNavigate?: () => void; info: BusinessInfo }) {
+   188→  const { user } = useAuth();
+   189→  const initials = (user?.name || user?.username || "?").slice(0, 2).toUpperCase();
+   190→  return (
+   191→    <div>
+   192→      <Link
+   193→        href="#"
+   194→        onClick={(e) => {
+   195→          e.preventDefault();
+   196→          onNavigate?.();
+   197→        }}
+   198→        className="flex items-center gap-3 px-4 py-4 border-b border-border"
+   199→      >
+   200→        <img src={info.logoUrl} alt={`Logo ${info.businessName}`} className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/30" />
+   201→        <div className="min-w-0">
+   202→          <div className="flex items-center gap-1.5">
+   203→            <p className="font-semibold text-[15px] leading-tight truncate">{info.businessName}</p>
+   204→            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+   205→          </div>
+   206→          <p className="text-xs text-muted-foreground truncate">Bisnis • Yogyakarta</p>
+   207→        </div>
+   208→      </Link>
+   209→      {/* Akun aktif + peran */}
+   210→      {user && (
+   211→        <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-secondary/40">
+   212→          <span
+   213→            className={`h-9 w-9 rounded-full flex items-center justify-center text-[12px] font-bold text-white shrink-0 ${
+   214→              user.role === "SUPER_ADMIN"
+   215→                ? "bg-gradient-to-br from-emerald-400 to-teal-600"
+   216→                : user.role === "ADMIN"
+   217→                  ? "bg-gradient-to-br from-amber-400 to-orange-500"
+   218→                  : "bg-gradient-to-br from-slate-300 to-slate-400"
+   219→            }`}
+   220→            aria-hidden="true"
+   221→          >
+   222→            {initials}
+   223→          </span>
+   224→          <div className="min-w-0">
+   225→            <p className="text-sm font-semibold leading-tight truncate">{user.name || user.username}</p>
+   226→            <p className="text-[11px] text-muted-foreground leading-tight truncate">
+   227→              {user.accessId} · Masuk sebagai <span className="font-medium text-foreground/80">{roleLabel(user.role)}</span>
+   228→            </p>
+   229→          </div>
+   230→        </div>
+   231→      )}
+   232→    </div>
+   233→  );
+   234→}
+   235→
+   236→/**
+   237→ * Nav berlabel — hanya dipakai di drawer mobile.
+   238→ */
+   239→function NavList({ active, onSelect }: { active: ViewId; onSelect: (id: ViewId) => void }) {
+   240→  const { businessName } = useBusinessProfile();
+   241→  const { user } = useAuth();
+   242→  const groups = visibleNav(user?.role);
+   243→  return (
+   244→    <nav className="flex-1 overflow-y-auto wa-scrollbar py-2" aria-label="Menu utama">
+   245→      {groups.map((group) => (
+   246→        <div key={group.group} className="mb-1">
+   247→          <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.group}</p>
+   248→          {group.items.map((item) => {
+   249→            const Icon = item.icon;
+   250→            const isActive = active === item.id;
+   251→            return (
+   252→              <button
+   253→                key={item.id}
+   254→                onClick={() => onSelect(item.id)}
+   255→                className={cn(
+   256→                  "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left",
+   257→                  "hover:bg-secondary",
+   258→                  isActive ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80"
+   259→                )}
+   260→                aria-current={isActive ? "page" : undefined}
+   261→              >
+   262→                <Icon className={cn("h-[18px] w-[18px] shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+   263→                <span className="truncate">{item.label}</span>
+   264→                {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />}
+   265→              </button>
+   266→            );
+   267→          })}
+   268→        </div>
+   269→      ))}
+   270→      {/* Keluar — selalu terlihat di dasar drawer mobile */}
+   271→      <DisplayToggles />
+   272→      <div className="px-0 pt-1 pb-0 border-t border-border">
+   273→        <LogoutButton appearance="row" />
+   274→      </div>
+   275→      <div className="px-4 pb-4 text-[11px] leading-relaxed text-muted-foreground">
+   276→        {businessName} v1.0 — demo aplikasi WhatsApp Business untuk UMKM.
+   277→      </div>
+   278→    </nav>
+   279→  );
+   280→}
+   281→
+   282→/**
+   283→ * Toggle cepat tampilan (Mode Gelap & Mode Hemat) — dasar drawer mobile,
+   284→ * sehingga bisa diakses dari semua view tanpa membuka Pengaturan.
+   285→ */
+   286→function DisplayToggles() {
+   287→  const { theme, setTheme } = useTheme();
+   288→  const lite = useDisplayPrefs((s) => s.lite);
+   289→  const setLite = useDisplayPrefs((s) => s.setLite);
+   290→  const isDark = theme === "dark";
+   291→
+   292→  return (
+   293→    <div className="px-0 py-2 border-t border-border">
+   294→      <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tampilan</p>
+   295→      <button
+   296→        type="button"
+   297→        onClick={() => setTheme(isDark ? "light" : "dark")}
+   298→        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-secondary"
+   299→        role="menuitemcheckbox"
+   300→        aria-checked={isDark}
+   301→      >
+   302→        <Moon className={cn("h-[18px] w-[18px] shrink-0", isDark ? "text-primary" : "text-muted-foreground")} />
+   303→        <span>Mode Gelap</span>
+   304→        {isDark && <Check className="ml-auto h-4 w-4 text-primary" aria-label="Aktif" />}
+   305→      </button>
+   306→      <button
+   307→        type="button"
+   308→        onClick={() => setLite(!lite)}
+   309→        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-secondary"
+   310→        role="menuitemcheckbox"
+   311→        aria-checked={lite}
+   312→      >
+   313→        <Leaf className={cn("h-[18px] w-[18px] shrink-0", lite ? "text-primary" : "text-muted-foreground")} />
+   314→        <span>Mode Hemat</span>
+   315→        {lite && <Check className="ml-auto h-4 w-4 text-primary" aria-label="Aktif" />}
+   316→      </button>
+   317→    </div>
+   318→  );
+   319→}
+   320→
+   321→/**
+   322→ * Rail ikon (desktop) — hanya logo/icon tanpa teks agar hemat ruang.
+   323→ * Nama modul muncul sebagai tooltip saat hover.
+   324→ */
+   325→function NavRail({ active, onSelect, info }: { active: ViewId; onSelect: (id: ViewId) => void; info: BusinessInfo }) {
+   326→  const { user } = useAuth();
+   327→  const groups = visibleNav(user?.role);
+   328→  return (
+   329→    <TooltipProvider delayDuration={150}>
+   330→      {/* Logo bisnis saja (tanpa teks) */}
+   331→      <div className="flex justify-center pt-3 pb-2.5 border-b border-border">
+   332→        <Tooltip>
+   333→          <TooltipTrigger asChild>
+   334→            <button
+   335→              onClick={() => onSelect("business-profile")}
+   336→              aria-label={`Profil Bisnis — ${info.businessName}`}
+   337→              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+   338→            >
+   339→              <img
+   340→                src={info.logoUrl}
+   341→                alt={`Logo ${info.businessName}`}
+   342→                className={cn(
+   343→                  "h-9 w-9 rounded-full object-cover transition-all",
+   344→                  active === "business-profile" ? "ring-2 ring-primary" : "ring-2 ring-primary/30 hover:ring-primary/60"
+   345→                )}
+   346→              />
+   347→            </button>
+   348→          </TooltipTrigger>
+   349→          <TooltipContent side="right" className="text-xs">
+   350→            <span className="font-semibold">{info.businessName}</span> — Profil Bisnis
+   351→          </TooltipContent>
+   352→        </Tooltip>
+   353→      </div>
+   354→
+   355→      {/* Ikon menu per grup, dipisah garis kecil (disaring izin peran) */}
+   356→      <nav className="flex-1 overflow-y-auto wa-scrollbar flex flex-col items-center py-2" aria-label="Menu utama">
+   357→        {groups.map((group, gi) => (
+   358→          <div key={group.group} className="flex flex-col items-center">
+   359→            {gi > 0 && <span className="h-px w-7 bg-border my-1.5" aria-hidden="true" />}
+   360→            {group.items.map((item) => {
+   361→              const Icon = item.icon;
+   362→              const isActive = active === item.id;
+   363→              return (
+   364→                <Tooltip key={item.id}>
+   365→                  <TooltipTrigger asChild>
+   366→                    <button
+   367→                      onClick={() => onSelect(item.id)}
+   368→                      aria-label={item.label}
+   369→                      aria-current={isActive ? "page" : undefined}
+   370→                      className={cn(
+   371→                        "relative mt-0.5 h-10 w-10 rounded-xl flex items-center justify-center transition-colors",
+   372→                        "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+   373→                        isActive ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+   374→                      )}
+   375→                    >
+   376→                      <Icon className="h-5 w-5 shrink-0" />
+   377→                      {isActive && <span className="absolute -left-[7px] h-5 w-[3px] rounded-full bg-primary" aria-hidden="true" />}
+   378→                    </button>
+   379→                  </TooltipTrigger>
+   380→                  <TooltipContent side="right" className="text-xs">
+   381→                    {item.label}
+   382→                    <span className="sr-only"> — grup {group.group}</span>
+   383→                  </TooltipContent>
+   384→                </Tooltip>
+   385→              );
+   386→            })}
+   387→          </div>
+   388→        ))}
+   389→      </nav>
+   390→
+   391→      {/* Keluar + Info versi */}
+   392→      <div className="pb-3 pt-1 flex flex-col items-center gap-0.5">
+   393→        <LogoutButton appearance="icon" />
+   394→        <Tooltip>
+   395→          <TooltipTrigger asChild>
+   396→            <button
+   397→              aria-label="Tentang aplikasi"
+   398→              className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/70 hover:bg-secondary hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+   399→            >
+   400→              <Info className="h-4 w-4" />
+   401→            </button>
+   402→          </TooltipTrigger>
+   403→          <TooltipContent side="right" className="text-xs max-w-44">
+   404→            {info.businessName} v1.0 — demo WhatsApp Business untuk UMKM
+   405→          </TooltipContent>
+   406→        </Tooltip>
+   407→      </div>
+   408→    </TooltipProvider>
+   409→  );
+   410→}
+   411→
+   412→/** Subscribe tidak-op: snapshot sesi keluar/kunci tidak pernah berubah tanpa reload halaman penuh. */
+   413→const noopSubscribe = () => () => {};
+   414→
+   415→function isLockedNow(): boolean {
+   416→  try {
+   417→    return window.sessionStorage.getItem("wa_locked") === "1";
+   418→  } catch {
+   419→    return false;
+   420→  }
+   421→}
+   422→
+   423→/** Tab navigasi bawah (mobile) */
+   424→function BottomTab({
+   425→  icon: Icon,
+   426→  label,
+   427→  active,
+   428→  onClick,
+   429→}: {
+   430→  icon: React.ElementType;
+   431→  label: string;
+   432→  active: boolean;
+   433→  onClick: () => void;
+   434→}) {
+   435→  return (
+   436→    <button
+   437→      type="button"
+   438→      onClick={onClick}
+   439→      aria-current={active ? "page" : undefined}
+   440→      aria-label={label}
+   441→      className={cn(
+   442→        "flex-1 min-w-[52px] h-full flex flex-col items-center justify-center gap-0.5 transition-colors focus-visible:outline-none focus-visible:bg-secondary",
+   443→        active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+   444→      )}
+   445→    >
+   446→      <Icon className="h-[22px] w-[22px]" aria-hidden="true" />
+   447→      <span className="text-[10px] font-medium">{label}</span>
+   448→    </button>
+   449→  );
+   450→}
+   451→
+   452→/** Wrapper sesi: seluruh aplikasi hanya dirender bila sudah masuk. */
+   453→export default function AppShell() {
+   454→  return (
+   455→    <AuthProvider>
+   456→      <DisplayPrefsSync />
+   457→      <ShellInner />
+   458→    </AuthProvider>
+   459→  );
+   460→}
+   461→
+   462→function ShellInner() {
+   463→  const { user, loading } = useAuth();
+   464→  const [view, setView] = useState<ViewId>("chats");
+   465→  const [menuOpen, setMenuOpen] = useState(false);
+   466→  // Sheet "+" (buat foto/video) & dialog logout dari menu ⋮ header atas
+   467→  const [createOpen, setCreateOpen] = useState(false);
+   468→  const [logoutOpen, setLogoutOpen] = useState(false);
+   469→  // Total pesan belum dibaca untuk badge "Tandai Semua Sudah Dibaca" (dimuat saat ⋮ dibuka)
+   470→  const [unreadTotal, setUnreadTotal] = useState(0);
+   471→  // Kunci aplikasi (menu ⋮ → "Kunci aplikasi") — flag dibaca via useSyncExternalStore agar SSR/hydration aman.
+   472→  const locked = useSyncExternalStore(noopSubscribe, isLockedNow, () => false);
+   473→  // Mode tampilan — toggle cepat di menu ⋮ (isi dropdown hanya dirender saat terbuka → aman hydration)
+   474→  const { theme, setTheme } = useTheme();
+   475→  const lite = useDisplayPrefs((s) => s.lite);
+   476→  const setLite = useDisplayPrefs((s) => s.setLite);
+   477→
+   478→  const unlockApp = () => {
+   479→    try {
+   480→      window.sessionStorage.removeItem("wa_locked");
+   481→    } catch {
+   482→      // abaikan
+   483→    }
+   484→    window.location.reload();
+   485→  };
+   486→
+   487→  // Kunci aplikasi (menu ⋮ header atas)
+   488→  const lockNow = () => {
+   489→    try {
+   490→      window.sessionStorage.setItem("wa_locked", "1");
+   491→    } catch {
+   492→      // abaikan
+   493→    }
+   494→    window.location.reload();
+   495→  };
+   496→
+   497→  // Muat total pesan belum dibaca saat menu ⋮ header atas dibuka
+   498→  const refreshUnread = useCallback(async () => {
+   499→    try {
+   500→      const res = await fetch("/api/chats?filter=all", { cache: "no-store" });
+   501→      const data = (await res.json()) as { chats?: { unread?: number }[] };
+   502→      setUnreadTotal((data.chats ?? []).reduce((a, c) => a + (c.unread ?? 0), 0));
+   503→    } catch {
+   504→      // abaikan
+   505→    }
+   506→  }, []);
+   507→
+   508→  // Status sesi keluar kini nyata via /api/auth/me (AuthProvider) — bukan sessionStorage lagi.
+   509→  const business = useBusinessProfile();
+   510→
+   511→  // Layar pemuatan sesi singkat saat pertama membuka aplikasi.
+   512→  if (loading) {
+   513→    return (
+   514→      <div className="h-screen w-full flex items-center justify-center bg-background" role="status" aria-label="Memuat aplikasi">
+   515→        <div className="flex flex-col items-center gap-3">
+   516→          <img src={business.logoUrl} alt="" className="h-14 w-14 rounded-2xl object-cover ring-4 ring-primary/10 animate-pulse" />
+   517→          <Loader2 className="h-5 w-5 text-primary animate-spin" />
+   518→        </div>
+   519→      </div>
+   520→    );
+   521→  }
+   522→
+   523→  // Belum masuk → layar login (Super Admin / Admin / Pengguna).
+   524→  if (!user) {
+   525→    return <LoginScreen />;
+   526→  }
+   527→
+   528→  if (locked) {
+   529→    return (
+   530→      <div
+   531→        className="h-screen w-full flex items-center justify-center bg-background p-6"
+   532→        role="main"
+   533→        aria-label="Aplikasi terkunci"
+   534→      >
+   535→        <div className="w-full max-w-sm text-center space-y-5">
+   536→          <span className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+   537→            <Lock className="h-9 w-9 text-primary" aria-hidden="true" />
+   538→          </span>
+   539→          <div className="space-y-1.5">
+   540→            <h1 className="text-xl font-bold tracking-tight">Aplikasi terkunci</h1>
+   541→            <p className="text-sm text-muted-foreground leading-relaxed">
+   542→              Sesi {business.businessName} dikunci dari perangkat ini. Buka kunci untuk melanjutkan.
+   543→            </p>
+   544→          </div>
+   545→          <Button onClick={unlockApp} className="w-full min-h-11" aria-label="Buka kunci aplikasi">
+   546→            <LockOpen className="h-4 w-4" /> Buka Kunci
+   547→          </Button>
+   548→          <p className="text-[11px] text-muted-foreground">Demo aplikasi WhatsApp Business untuk UMKM · v1.0</p>
+   549→        </div>
+   550→      </div>
+   551→    );
+   552→  }
+   553→
+   554→  const handleNav = (id: ViewId) => {
+   555→    setView(id);
+   556→    setMenuOpen(false);
+   557→  };
+   558→
+   559→  const ActiveView = VIEWS[view];
+   560→  const activeLabel = NAV.flatMap((g) => g.items).find((i) => i.id === view)?.label ?? "Chat";
+   561→
+   562→  return (
+   563→    <div className="h-screen w-full flex overflow-hidden bg-background">
+   564→      {/* Rail ikon desktop — hanya icon agar hemat ruang */}
+   565→      <aside className="hidden md:flex w-16 flex-col border-r border-border bg-sidebar shrink-0">
+   566→        <NavRail active={view} onSelect={handleNav} info={business} />
+   567→      </aside>
+   568→
+   569→      {/* Main area */}
+   570→      <div className="flex-1 flex flex-col min-w-0">
+   571→        {/* Top bar mobile */}
+   572→        <header className="md:hidden flex items-center gap-2 h-14 px-3 border-b border-border bg-sidebar shrink-0">
+   573→          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+   574→            <SheetTrigger asChild>
+   575→              <Button variant="ghost" size="icon" aria-label="Buka menu">
+   576→                <Menu className="h-5 w-5" />
+   577→              </Button>
+   578→            </SheetTrigger>
+   579→            <SheetContent side="left" className="p-0 w-72">
+   580→              <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
+   581→              <BusinessHeader onNavigate={() => handleNav("business-profile")} info={business} />
+   582→              <NavList active={view} onSelect={handleNav} />
+   583→            </SheetContent>
+   584→          </Sheet>
+   585→          <img src={business.logoUrl} alt={`Logo ${business.businessName}`} className="h-8 w-8 rounded-full object-cover" />
+   586→          <div className="min-w-0">
+   587→            <p className="text-sm font-semibold leading-tight truncate">{business.businessName}</p>
+   588→            <p className="text-[11px] text-muted-foreground leading-tight truncate">{activeLabel}</p>
+   589→          </div>
+   590→          {/* Menu utama (⋮) — dipindah dari panel daftar chat ke pojok header atas (mobile) */}
+   591→          {view === "chats" && (
+   592→            <DropdownMenu onOpenChange={(o) => { if (o) void refreshUnread(); }}>
+   593→              <DropdownMenuTrigger asChild>
+   594→                <Button variant="ghost" size="icon" aria-label="Menu utama" className="ml-auto shrink-0">
+   595→                  <MoreVertical className="h-5 w-5 text-muted-foreground" />
+   596→                </Button>
+   597→              </DropdownMenuTrigger>
+   598→              <DropdownMenuContent align="end" className="w-60">
+   599→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("business-profile")}>
+   600→                  <Store className="h-4 w-4" /> Fitur bisnis
+   601→                </DropdownMenuItem>
+   602→                <DropdownMenuItem
+   603→                  className="gap-2.5 cursor-pointer"
+   604→                  onClick={() => window.dispatchEvent(new CustomEvent("wa:new-chat", { detail: { kind: "group" } }))}
+   605→                >
+   606→                  <UsersRound className="h-4 w-4" /> Grup baru
+   607→                </DropdownMenuItem>
+   608→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("promotions")}>
+   609→                  <Megaphone className="h-4 w-4" /> Iklankan
+   610→                </DropdownMenuItem>
+   611→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("broadcast")}>
+   612→                  <RadioTower className="h-4 w-4" /> Siaran bisnis
+   613→                </DropdownMenuItem>
+   614→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("catalog")}>
+   615→                  <LayoutGrid className="h-4 w-4" /> Katalog
+   616→                </DropdownMenuItem>
+   617→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("catalog")}>
+   618→                  <ClipboardList className="h-4 w-4" /> Order
+   619→                </DropdownMenuItem>
+   620→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("autoreplies")}>
+   621→                  <Zap className="h-4 w-4" /> Balasan cepat
+   622→                </DropdownMenuItem>
+   623→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => window.dispatchEvent(new Event("wa:open-starred"))}>
+   624→                  <Star className="h-4 w-4" /> Pesan berbintang
+   625→                </DropdownMenuItem>
+   626→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => window.dispatchEvent(new Event("wa:select-chats"))}>
+   627→                  <SquareCheckBig className="h-4 w-4" /> Pilih obrolan
+   628→                </DropdownMenuItem>
+   629→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("labels")}>
+   630→                  <Bookmark className="h-4 w-4" /> Daftar
+   631→                </DropdownMenuItem>
+   632→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => window.dispatchEvent(new Event("wa:mark-all-read"))}>
+   633→                  <CheckCheck className="h-4 w-4" />
+   634→                  Tandai Semua Sudah Dibaca
+   635→                  {unreadTotal > 0 && (
+   636→                    <span className="ml-auto text-[11px] font-semibold bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">
+   637→                      {unreadTotal}
+   638→                    </span>
+   639→                  )}
+   640→                </DropdownMenuItem>
+   641→                {can(user.role, "users.manage") && (
+   642→                  <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => handleNav("users")}>
+   643→                    <UserCog className="h-4 w-4" /> Manajemen Pengguna
+   644→                  </DropdownMenuItem>
+   645→                )}
+   646→                <DropdownMenuSeparator />
+   647→                <DropdownMenuItem
+   648→                  className="gap-2.5 cursor-pointer"
+   649→                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+   650→                >
+   651→                  <Moon className="h-4 w-4" /> Mode Gelap
+   652→                  {theme === "dark" && <Check className="ml-auto h-4 w-4 text-primary" />}
+   653→                </DropdownMenuItem>
+   654→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setLite(!lite)}>
+   655→                  <Leaf className="h-4 w-4" /> Mode Hemat
+   656→                  {lite && <Check className="ml-auto h-4 w-4 text-primary" />}
+   657→                </DropdownMenuItem>
+   658→                <DropdownMenuSeparator />
+   659→                <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={lockNow}>
+   660→                  <Lock className="h-4 w-4" /> Kunci aplikasi
+   661→                </DropdownMenuItem>
+   662→                <DropdownMenuSeparator />
+   663→                <DropdownMenuItem className="gap-2.5 cursor-pointer" variant="destructive" onClick={() => setLogoutOpen(true)}>
+   664→                  <LogOut className="h-4 w-4" /> Logout
+   665→                </DropdownMenuItem>
+   666→              </DropdownMenuContent>
+   667→            </DropdownMenu>
+   668→          )}
+   669→          {/* Tombol chat/grup baru — dipindah dari header panel daftar chat ke pojok kanan atas
+   670→              (sesuai anotasi screenshot). Hanya tampil saat view Chat aktif. */}
+   671→          {view === "chats" && (
+   672→            <DropdownMenu>
+   673→              <DropdownMenuTrigger asChild>
+   674→                <Button variant="ghost" size="icon" aria-label="Buat chat baru" className="shrink-0">
+   675→                  <MessageSquarePlus className="h-5 w-5 text-primary" />
+   676→                </Button>
+   677→              </DropdownMenuTrigger>
+   678→              <DropdownMenuContent align="end" className="w-44">
+   679→                <DropdownMenuItem
+   680→                  onClick={() => window.dispatchEvent(new CustomEvent("wa:new-chat", { detail: { kind: "chat" } }))}
+   681→                  className="gap-2 cursor-pointer"
+   682→                >
+   683→                  <UsersRound className="h-4 w-4" /> Chat Baru
+   684→                </DropdownMenuItem>
+   685→                <DropdownMenuItem
+   686→                  onClick={() => window.dispatchEvent(new CustomEvent("wa:new-chat", { detail: { kind: "group" } }))}
+   687→                  className="gap-2 cursor-pointer"
+   688→                >
+   689→                  <UsersRound className="h-4 w-4" /> Grup Baru
+   690→                </DropdownMenuItem>
+   691→              </DropdownMenuContent>
+   692→            </DropdownMenu>
+   693→          )}
+   694→          {/* Tombol "+ Tambah Produk" — dipindah dari kepala Marketplace ke panel header atas
+   695→              (sesuai anotasi screenshot). Hanya tampil di view Marketplace & untuk peran
+   696→              berhak mengelola produk (Super Admin / Admin). */}
+   697→          {view === "marketplace" && can(user.role, "market.manage") && (
+   698→            <Button
+   699→              size="sm"
+   700→              className="ml-auto shrink-0 gap-1.5"
+   701→              aria-label="Tambah produk marketplace"
+   702→              onClick={() => window.dispatchEvent(new CustomEvent("wa:market:new-product"))}
+   703→            >
+   704→              <Plus className="h-4 w-4" /> Tambah Produk
+   705→            </Button>
+   706→          )}
+   707→          {/* Logo/tombol pojok kanan top bar per view (mobile) — dipindah dari header internal
+   708→              view sesuai anotasi: Panggilan (logo telepon), Komunitas (logo ikon), Status
+   709→              (+ Tambah), Channel (+ Buat Channel), Katalog (logo ikon + keranjang),
+   710→              Label Pelanggan (+ Label Baru). Desktop tetap memakai header internal view. */}
+   711→          {view === "calls" && (
+   712→            <span
+   713→              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10"
+   714→              aria-hidden="true"
+   715→            >
+   716→              <Phone className="h-5 w-5 text-primary" />
+   717→            </span>
+   718→          )}
+   719→          {view === "community" && (
+   720→            <span
+   721→              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10"
+   722→              aria-hidden="true"
+   723→            >
+   724→              <Users className="h-5 w-5 text-primary" />
+   725→            </span>
+   726→          )}
+   727→          {view === "status" && (
+   728→            <Button
+   729→              size="sm"
+   730→              className="ml-auto shrink-0 gap-1.5"
+   731→              aria-label="Tambah status"
+   732→              onClick={() => window.dispatchEvent(new CustomEvent("wa:status:add"))}
+   733→            >
+   734→              <Plus className="h-4 w-4" /> Tambah
+   735→            </Button>
+   736→          )}
+   737→          {view === "channels" && (
+   738→            <Button
+   739→              size="sm"
+   740→              className="ml-auto shrink-0 gap-1.5"
+   741→              aria-label="Buat channel"
+   742→              onClick={() => window.dispatchEvent(new CustomEvent("wa:channels:create"))}
+   743→            >
+   744→              <Plus className="h-4 w-4" /> Buat Channel
+   745→            </Button>
+   746→          )}
+   747→          {view === "catalog" && (
+   748→            <div className="ml-auto flex shrink-0 items-center gap-2">
+   749→              <span
+   750→                className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10"
+   751→                aria-hidden="true"
+   752→              >
+   753→                <ShoppingBag className="h-5 w-5 text-primary" />
+   754→              </span>
+   755→              <CartSheet />
+   756→            </div>
+   757→          )}
+   758→          {view === "labels" && (
+   759→            <Button
+   760→              size="sm"
+   761→              className="ml-auto shrink-0 gap-1.5"
+   762→              aria-label="Tambah label baru"
+   763→              onClick={() => window.dispatchEvent(new CustomEvent("wa:labels:new"))}
+   764→            >
+   765→              <Plus className="h-4 w-4" /> Label Baru
+   766→            </Button>
+   767→          )}
+   768→        </header>
+   769→
+   770→        <main className="flex-1 min-h-0 min-w-0 overflow-hidden">
+   771→          {view === "chats" ? (
+   772→            <ChatsView onNavigate={setView} />
+   773→          ) : view === "beranda" ? (
+   774→            <BerandaView onNavigate={setView} />
+   775→          ) : view === "marketplace" ? (
+   776→            <MarketplaceView onNavigate={setView} />
+   777→          ) : (
+   778→            <ActiveView />
+   779→          )}
+   780→        </main>
+   781→
+   782→        {/* Navigasi bawah (mobile): Beranda · Marketplace · + · Chat · Profil.
+   783→            relative z-50 WAJIB: tombol "+" menonjol (-mt-4) ke area konten di atasnya;
+   784→            tanpa stacking context ini, konten view yang ber-z-index (overlay video Beranda
+   785→            z-10, dsb.) menutupi & memblokir klik tombol "+". */}
+   786→        <nav
+   787→          className="md:hidden relative z-50 shrink-0 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)]"
+   788→          aria-label="Navigasi utama"
+   789→        >
+   790→          <div className="flex items-stretch h-16 max-w-lg mx-auto">
+   791→            <BottomTab icon={Home} label="Beranda" active={view === "beranda"} onClick={() => handleNav("beranda")} />
+   792→            <BottomTab icon={Store} label="Market" active={view === "marketplace"} onClick={() => handleNav("marketplace")} />
+   793→            <div className="flex-1 flex items-start justify-center">
+   794→              <button
+   795→                type="button"
+   796→                onClick={() => setCreateOpen(true)}
+   797→                aria-label="Buat konten baru"
+   798→                className="relative z-10 -mt-4 h-12 w-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+   799→              >
+   800→                <Plus className="h-6 w-6" aria-hidden="true" />
+   801→              </button>
+   802→            </div>
+   803→            <BottomTab icon={MessageCircle} label="Chat" active={view === "chats"} onClick={() => handleNav("chats")} />
+   804→            <BottomTab
+   805→              icon={CircleUserRound}
+   806→              label="Profil"
+   807→              active={view === "business-profile"}
+   808→              onClick={() => handleNav("business-profile")}
+   809→            />
+   810→          </div>
+   811→        </nav>
+   812→      </div>
+   813→
+   814→      {/* Dering masuk panggilan WebRTC (global, satu overlay per tab) */}
+   815→      <IncomingCallCenter />
+   816→
+   817→      {/* Sheet "+" — buat foto (→ Status) dan video (→ Beranda) */}
+   818→      <CreateSheet open={createOpen} onOpenChange={setCreateOpen} onNavigate={handleNav} />
+   819→
+   820→      {/* Dialog logout dari menu ⋮ header atas */}
+   821→      <ConfirmDialog
+   822→        open={logoutOpen}
+   823→        onOpenChange={setLogoutOpen}
+   824→        title={`Keluar dari ${business.businessName}?`}
+   825→        description="Sesi akan ditutup di perangkat ini. Chat dan data bisnis Anda tetap aman."
+   826→        confirmLabel="Keluar"
+   827→        destructive
+   828→        onConfirm={performLogout}
+   829→      />
+   830→    </div>
+   831→  );
+   832→}
+   833→

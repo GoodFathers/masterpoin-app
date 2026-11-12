@@ -1,0 +1,909 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→import {
+     5→  BellOff,
+     6→  BellRing,
+     7→  BookOpen,
+     8→  CalendarCheck,
+     9→  Check,
+    10→  Church,
+    11→  Clock,
+    12→  Cross,
+    13→  Flame,
+    14→  Flower2,
+    15→  Gift,
+    16→  HeartPulse,
+    17→  Hourglass,
+    18→  Leaf,
+    19→  Loader2,
+    20→  Lock,
+    21→  MessageSquare,
+    22→  MoonStar,
+    23→  ScrollText,
+    24→  Share2,
+    25→  Store,
+    26→  Trophy,
+    27→  UserRound,
+    28→  Users,
+    29→} from "lucide-react";
+    30→import { Button } from "@/components/ui/button";
+    31→import { Badge } from "@/components/ui/badge";
+    32→import { Card, CardContent } from "@/components/ui/card";
+    33→import { Skeleton } from "@/components/ui/skeleton";
+    34→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    35→import { useSession } from "@/hooks/use-session";
+    36→import { useToast } from "@/hooks/use-toast";
+    37→import { formatCountdownId, formatMp } from "@/lib/indigoo";
+    38→import {
+    39→  isAlarmEnabled,
+    40→  playTaskAlarm,
+    41→  playTaskDone,
+    42→  primeAudio,
+    43→  setAlarmEnabled,
+    44→} from "@/lib/alarm";
+    45→import {
+    46→  RELIGIONS,
+    47→  SESSIONS,
+    48→  WORSHIP_SCHEDULE,
+    49→  isCheckInMilestone,
+    50→  religionLabel,
+    51→  type ActivityCategory,
+    52→  type CheckInInfo,
+    53→  type ScheduleItemStatus,
+    54→} from "@/lib/routines";
+    55→
+    56→interface RoutineStatus {
+    57→  key: string;
+    58→  title: string;
+    59→  description: string;
+    60→  rewardMp: number;
+    61→  available: boolean;
+    62→  claimed: boolean;
+    63→  requirement?: string;
+    64→}
+    65→
+    66→interface RoutinesPayload {
+    67→  day: string;
+    68→  routines: RoutineStatus[];
+    69→  checkIn: CheckInInfo;
+    70→  schedule: ScheduleItemStatus[];
+    71→  religion: string;
+    72→  flags?: Record<string, boolean>;
+    73→}
+    74→
+    75→const ROUTINE_ICONS: Record<string, typeof CalendarCheck> = {
+    76→  absen: CalendarCheck,
+    77→  chat: MessageSquare,
+    78→  profil: UserRound,
+    79→  bagikan: Share2,
+    80→};
+    81→
+    82→/** Ikon tiap agama pada kartu Waktu Ibadah. */
+    83→const RELIGION_ICONS: Record<string, typeof MoonStar> = {
+    84→  islam: MoonStar,
+    85→  kristen: Cross,
+    86→  katolik: Church,
+    87→  hindu: Flower2,
+    88→  buddha: Leaf,
+    89→  khonghucu: ScrollText,
+    90→};
+    91→
+    92→const CATEGORY_STYLE: Record<ActivityCategory, { icon: typeof MoonStar; chip: string; label: string }> = {
+    93→  ibadah: {
+    94→    icon: MoonStar,
+    95→    label: "Ibadah",
+    96→    chip: "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
+    97→  },
+    98→  kesehatan: {
+    99→    icon: HeartPulse,
+   100→    label: "Kesehatan",
+   101→    chip: "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
+   102→  },
+   103→  belajar: {
+   104→    icon: BookOpen,
+   105→    label: "Belajar",
+   106→    chip: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+   107→  },
+   108→  bisnis: {
+   109→    icon: Store,
+   110→    label: "Bisnis",
+   111→    chip: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+   112→  },
+   113→  keluarga: {
+   114→    icon: Users,
+   115→    label: "Keluarga",
+   116→    chip: "bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300",
+   117→  },
+   118→};
+   119→
+   120→/** Cincin progres kecil "x/y hari ini". */
+   121→function ProgressRing({ value, max }: { value: number; max: number }) {
+   122→  const r = 26;
+   123→  const c = 2 * Math.PI * r;
+   124→  const pct = max > 0 ? Math.min(1, value / max) : 0;
+   125→  return (
+   126→    <div className="relative h-16 w-16 shrink-0" role="img" aria-label={`${value} dari ${max} rutinitas dan kegiatan selesai hari ini`}>
+   127→      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
+   128→        <circle cx="32" cy="32" r={r} fill="none" strokeWidth="7" className="stroke-emerald-100 dark:stroke-emerald-950" />
+   129→        <circle
+   130→          cx="32"
+   131→          cy="32"
+   132→          r={r}
+   133→          fill="none"
+   134→          strokeWidth="7"
+   135→          strokeLinecap="round"
+   136→          className="stroke-emerald-500 transition-all duration-500"
+   137→          strokeDasharray={c}
+   138→          strokeDashoffset={c * (1 - pct)}
+   139→        />
+   140→      </svg>
+   141→      <div className="absolute inset-0 flex flex-col items-center justify-center">
+   142→        <span className="text-sm font-bold leading-none">{value}</span>
+   143→        <span className="text-[10px] text-muted-foreground leading-none mt-0.5">/{max}</span>
+   144→      </div>
+   145→    </div>
+   146→  );
+   147→}
+   148→
+   149→/** Satu sel pada papan Check-In 30 Hari. */
+   150→function CheckInCell({
+   151→  pos,
+   152→  done,
+   153→  isNext,
+   154→  checkedToday,
+   155→}: {
+   156→  pos: number;
+   157→  done: boolean;
+   158→  isNext: boolean;
+   159→  checkedToday: boolean;
+   160→}) {
+   161→  const milestone = isCheckInMilestone(pos);
+   162→  const base =
+   163→    "relative flex aspect-square flex-col items-center justify-center rounded-xl border text-[10px] font-semibold transition-colors";
+   164→  const cls = done
+   165→    ? milestone
+   166→      ? "border-amber-300 bg-amber-400/90 text-amber-950 shadow-sm"
+   167→      : "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+   168→    : isNext
+   169→      ? "border-2 border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 animate-pulse"
+   170→      : "border-border bg-muted/40 text-muted-foreground/70";
+   171→
+   172→  return (
+   173→    <div className={`${base} ${cls}`} title={`Hari ${pos}${milestone ? ` — milestone +${pos === 30 ? "20.000" : pos === 21 ? "7.500" : pos === 14 ? "5.000" : "3.000"} mP` : ""}`}>
+   174→      {done ? (
+   175→        milestone ? (
+   176→          <Gift className="h-4 w-4" aria-hidden="true" />
+   177→        ) : (
+   178→          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+   179→        )
+   180→      ) : milestone ? (
+   181→        <Gift className="h-3.5 w-3.5 opacity-80" aria-hidden="true" />
+   182→      ) : (
+   183→        <span>{pos}</span>
+   184→      )}
+   185→      {milestone && (
+   186→        <span className="text-[8px] leading-none mt-0.5 font-bold">{pos === 30 ? "20rb" : pos === 21 ? "7,5rb" : pos === 14 ? "5rb" : "3rb"}</span>
+   187→      )}
+   188→      {isNext && !checkedToday && (
+   189→        <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-background" aria-hidden="true" />
+   190→      )}
+   191→      <span className="sr-only">{`Hari ${pos}${done ? " sudah check-in" : milestone ? " milestone" : ""}`}</span>
+   192→    </div>
+   193→  );
+   194→}
+   195→
+   196→/** Beri tahu aplikasi bahwa saldo mP berubah (chip TopBar ikut diperbarui). */
+   197→function notifyMpChanged() {
+   198→  window.dispatchEvent(new CustomEvent("indigoo:mp-changed"));
+   199→}
+   200→
+   201→export default function RoutinesTab() {
+   202→  const { refresh } = useSession();
+   203→  const { toast } = useToast();
+   204→  const [data, setData] = useState<RoutinesPayload | null>(null);
+   205→  const [claiming, setClaiming] = useState<string | null>(null);
+   206→  const [checkingIn, setCheckingIn] = useState(false);
+   207→  // Tick waktu untuk countdown gerbang Check-In 24 jam (Ketentuan #1).
+   208→  const [nowTick, setNowTick] = useState(() => Date.now());
+   209→  // Alarm tugas: bunyi khusus saat waktu tugas tiba (default aktif).
+   210→  const [alarmOn, setAlarmOn] = useState(true);
+   211→
+   212→  useEffect(() => {
+   213→    setAlarmOn(isAlarmEnabled());
+   214→  }, []);
+   215→
+   216→  const toggleAlarm = useCallback(() => {
+   217→    const next = !isAlarmEnabled();
+   218→    setAlarmEnabled(next);
+   219→    setAlarmOn(next);
+   220→    primeAudio(); // gestur klik → buka kunci audio
+   221→    if (next) {
+   222→      playTaskAlarm(); // contoh bunyi agar pengguna tahu alarmnya seperti apa
+   223→      toast({
+   224→        title: "Alarm tugas AKTIF 🔔",
+   225→        description: "Bunyi khusus akan berbunyi tiap waktu tugas tiba & saat tugas selesai diklaim.",
+   226→      });
+   227→    } else {
+   228→      toast({ title: "Alarm tugas dimatikan 🔕", description: "Tidak ada bunyi saat waktu tugas tiba." });
+   229→    }
+   230→  }, [toast]);
+   231→
+   232→  useEffect(() => {
+   233→    const id = setInterval(() => setNowTick(Date.now()), 15_000);
+   234→    return () => clearInterval(id);
+   235→  }, []);
+   236→
+   237→  const load = useCallback(async () => {
+   238→    try {
+   239→      const res = await fetch("/api/routines", { cache: "no-store" });
+   240→      if (!res.ok) {
+   241→        setData(null);
+   242→        return;
+   243→      }
+   244→      const payload = (await res.json()) as RoutinesPayload;
+   245→      setData(payload);
+   246→    } catch {
+   247→      setData(null);
+   248→    }
+   249→  }, []);
+   250→
+   251→  // Auto-muat (juga tiap tab dibuka / komponen di-mount).
+   252→  useEffect(() => {
+   253→    void load();
+   254→  }, [load]);
+   255→
+   256→  // Cooldown Check-In 24 jam berakhir → segarkan status otomatis.
+   257→  useEffect(() => {
+   258→    const nextAt = data?.checkIn?.nextCheckInAt;
+   259→    if (nextAt && new Date(nextAt).getTime() <= nowTick) void load();
+   260→  }, [nowTick, data, load]);
+   261→
+   262→  // ---------- Klaim rutinitas harian lama (absen/chat/profil/bagikan) ----------
+   263→  const claim = useCallback(
+   264→    async (key: string) => {
+   265→      setClaiming(key);
+   266→      try {
+   267→        const res = await fetch("/api/routines/claim", {
+   268→          method: "POST",
+   269→          headers: { "Content-Type": "application/json" },
+   270→          body: JSON.stringify({ key }),
+   271→        });
+   272→        const resData = (await res.json()) as {
+   273→          error?: string;
+   274→          routine?: { key: string; title: string; rewardMp: number };
+   275→        };
+   276→        if (!res.ok || !resData.routine) {
+   277→          toast({ title: "Gagal klaim", description: resData.error ?? "Coba lagi.", variant: "destructive" });
+   278→          return;
+   279→        }
+   280→        toast({
+   281→          title: `+${formatMp(resData.routine.rewardMp)} mP diterima 🎉`,
+   282→          description: `${resData.routine.title} — bonus masuk ke saldo Anda.`,
+   283→        });
+   284→        playTaskDone(); // bunyi: tugas harian selesai diklaim
+   285→        notifyMpChanged();
+   286→        await refresh();
+   287→        await load();
+   288→      } catch {
+   289→        toast({ title: "Gagal klaim", description: "Tidak dapat menghubungi server.", variant: "destructive" });
+   290→      } finally {
+   291→        setClaiming(null);
+   292→      }
+   293→    },
+   294→    [load, refresh, toast]
+   295→  );
+   296→
+   297→  // ---------- Check-In 30 Hari ----------
+   298→  const doCheckIn = useCallback(async () => {
+   299→    setCheckingIn(true);
+   300→    try {
+   301→      const res = await fetch("/api/routines/checkin", { method: "POST" });
+   302→      const resData = (await res.json()) as {
+   303→        error?: string;
+   304→        checkIn?: { position: number; rewardMp: number; milestone: boolean };
+   305→      };
+   306→      if (!res.ok || !resData.checkIn) {
+   307→        toast({ title: "Check-In gagal", description: resData.error ?? "Coba lagi.", variant: "destructive" });
+   308→        return;
+   309→      }
+   310→      const { position, rewardMp, milestone } = resData.checkIn;
+   311→      toast({
+   312→        title: `+${formatMp(rewardMp)} mP — Check-In Hari ${position} 🎉`,
+   313→        description: milestone
+   314→          ? `Milestone hari ke-${position}! Bonus besar sudah masuk ke saldo Anda.`
+   315→          : "Check-In berhasil. Kembali besok untuk merawat streak Anda.",
+   316→      });
+   317→      playTaskDone(); // bunyi: Check-In selesai
+   318→      notifyMpChanged();
+   319→      await refresh();
+   320→      await load();
+   321→    } catch {
+   322→      toast({ title: "Check-In gagal", description: "Tidak dapat menghubungi server.", variant: "destructive" });
+   323→    } finally {
+   324→      setCheckingIn(false);
+   325→    }
+   326→  }, [load, refresh, toast]);
+   327→
+   328→  // ---------- Tandai kegiatan jadwal harian ----------
+   329→  const markActivity = useCallback(
+   330→    async (key: string) => {
+   331→      setClaiming(key);
+   332→      try {
+   333→        const res = await fetch("/api/routines/schedule", {
+   334→          method: "POST",
+   335→          headers: { "Content-Type": "application/json" },
+   336→          body: JSON.stringify({ key }),
+   337→        });
+   338→        const resData = (await res.json()) as {
+   339→          error?: string;
+   340→          activity?: { key: string; title: string; rewardMp: number };
+   341→        };
+   342→        if (!res.ok || !resData.activity) {
+   343→          toast({ title: "Gagal menandai", description: resData.error ?? "Coba lagi.", variant: "destructive" });
+   344→          return;
+   345→        }
+   346→        toast({
+   347→          title: `+${formatMp(resData.activity.rewardMp)} mP diterima 🎉`,
+   348→          description: `${resData.activity.title} tercatat — lanjutkan kegiatan berikutnya!`,
+   349→        });
+   350→        playTaskDone(); // bunyi: kegiatan jadwal selesai dikerjakan
+   351→        notifyMpChanged();
+   352→        await refresh();
+   353→        await load();
+   354→      } catch {
+   355→        toast({ title: "Gagal menandai", description: "Tidak dapat menghubungi server.", variant: "destructive" });
+   356→      } finally {
+   357→        setClaiming(null);
+   358→      }
+   359→    },
+   360→    [load, refresh, toast]
+   361→  );
+   362→
+   363→  // ---------- Pilih agama (waktu ibadah) ----------
+   364→  const setReligion = useCallback(
+   365→    async (value: string) => {
+   366→      const next = value === "none" ? "" : value;
+   367→      setClaiming("__religion__");
+   368→      setData((prev) => (prev ? { ...prev, religion: next } : prev)); // optimis
+   369→      try {
+   370→        const res = await fetch("/api/routines/religion", {
+   371→          method: "POST",
+   372→          headers: { "Content-Type": "application/json" },
+   373→          body: JSON.stringify({ religion: next }),
+   374→        });
+   375→        if (!res.ok) {
+   376→          const resData = (await res.json()) as { error?: string };
+   377→          toast({ title: "Gagal menyimpan agama", description: resData.error ?? "Coba lagi.", variant: "destructive" });
+   378→        } else {
+   379→          toast({
+   380→            title: next ? `Waktu ibadah ${religionLabel(next)} ditambahkan ke jadwal` : "Kegiatan ibadah disembunyikan dari jadwal",
+   381→            description: next ? "Jadwal ibadah indikatif WIB — sesuaikan dengan jadwal setempat." : undefined,
+   382→          });
+   383→        }
+   384→        await load();
+   385→      } catch {
+   386→        toast({ title: "Gagal menyimpan agama", description: "Tidak dapat menghubungi server.", variant: "destructive" });
+   387→      } finally {
+   388→        setClaiming(null);
+   389→      }
+   390→    },
+   391→    [load, toast]
+   392→  );
+   393→
+   394→  const routines = data?.routines ?? [];
+   395→  const schedule = data?.schedule ?? [];
+   396→  const checkIn = data?.checkIn;
+   397→  const claimedCount = routines.filter((r) => r.claimed).length;
+   398→  const scheduleDone = schedule.filter((a) => a.done).length;
+   399→  const scheduleMp = schedule.filter((a) => a.done).reduce((s, a) => s + a.rewardMp, 0);
+   400→  const dayValue = claimedCount + scheduleDone + (checkIn?.checkedToday ? 1 : 0);
+   401→  const dayMax = 1 + routines.length + schedule.length;
+   402→
+   403→  // Kelompokkan kegiatan per sesi (Dini Hari → Malam).
+   404→  const sessionGroups = useMemo(
+   405→    () =>
+   406→      SESSIONS.map((s) => ({
+   407→        ...s,
+   408→        items: schedule.filter((a) => a.session === s.id),
+   409→      })).filter((g) => g.items.length > 0),
+   410→    [schedule]
+   411→  );
+   412→
+   413→  return (
+   414→    <div className="h-full flex flex-col bg-background">
+   415→      <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card shrink-0">
+   416→        <div className="min-w-0 flex-1">
+   417→          <h1 className="text-lg font-bold tracking-tight">Rutinitas</h1>
+   418→          <p className="text-xs text-muted-foreground">Check-In 30 Hari & kegiatan 03.30–23.32 WIB, kumpulkan bonus mP</p>
+   419→        </div>
+   420→        <Button
+   421→          variant="ghost"
+   422→          size="icon"
+   423→          onClick={toggleAlarm}
+   424→          aria-pressed={alarmOn}
+   425→          aria-label={alarmOn ? "Matikan alarm tugas" : "Aktifkan alarm tugas"}
+   426→          title={alarmOn ? "Alarm tugas aktif — klik untuk mematikan" : "Alarm tugas mati — klik untuk mengaktifkan"}
+   427→          className="h-11 w-11 shrink-0 rounded-full"
+   428→        >
+   429→          {alarmOn ? (
+   430→            <BellRing className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+   431→          ) : (
+   432→            <BellOff className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+   433→          )}
+   434→        </Button>
+   435→        <ProgressRing value={dayValue} max={dayMax} />
+   436→      </header>
+   437→
+   438→      <div className="flex-1 overflow-y-auto wa-scrollbar p-4">
+   439→        <div className="max-w-2xl w-full mx-auto space-y-5">
+   440→          {data === null ? (
+   441→            <>
+   442→              <Skeleton className="h-64 w-full rounded-xl" />
+   443→              <Skeleton className="h-96 w-full rounded-xl" />
+   444→              <Skeleton className="h-24 w-full rounded-xl" />
+   445→              <Skeleton className="h-24 w-full rounded-xl" />
+   446→            </>
+   447→          ) : (
+   448→            <>
+   449→              <p className="text-xs text-muted-foreground px-1">
+   450→                Hari ini{data.day ? ` • ${data.day}` : ""} • {dayValue}/{dayMax} selesai
+   451→              </p>
+   452→
+   453→              {/* ================= MODUL CHECK-IN 30 HARI ================= */}
+   454→              {checkIn && (
+   455→                <Card>
+   456→                  <CardContent className="p-4">
+   457→                    <div className="flex items-start gap-3">
+   458→                      <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 bg-amber-100 dark:bg-amber-950/60">
+   459→                        <Flame className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+   460→                      </div>
+   461→                      <div className="min-w-0 flex-1">
+   462→                        <div className="flex items-center gap-2 flex-wrap">
+   463→                          <p className="font-semibold text-sm">Check-In 30 Hari</p>
+   464→                          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900">
+   465→                            Hari {checkIn.nextPosition}/30
+   466→                          </Badge>
+   467→                        </div>
+   468→                        <p className="text-xs text-muted-foreground mt-0.5">
+   469→                          Check-In hanya 1× dalam 24 jam. Hadiah milestone di hari ke-7, 14, 21 &amp; 30.
+   470→                        </p>
+   471→                      </div>
+   472→                    </div>
+   473→
+   474→                    {/* Statistik streak */}
+   475→                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+   476→                      <div className="rounded-lg border border-orange-200/60 bg-orange-50/60 dark:border-orange-900 dark:bg-orange-950/30 px-2.5 py-2">
+   477→                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   478→                          <Flame className="h-3.5 w-3.5 text-orange-500" aria-hidden="true" /> Streak
+   479→                        </p>
+   480→                        <p className="text-base font-bold leading-tight mt-0.5">{checkIn.streak} hari</p>
+   481→                      </div>
+   482→                      <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30 px-2.5 py-2">
+   483→                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   484→                          <CalendarCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> Siklus
+   485→                        </p>
+   486→                        <p className="text-base font-bold leading-tight mt-0.5">{checkIn.cycleDone}/30</p>
+   487→                      </div>
+   488→                      <div className="rounded-lg border border-teal-200/60 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30 px-2.5 py-2">
+   489→                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   490→                          <Trophy className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" /> Rekor
+   491→                        </p>
+   492→                        <p className="text-base font-bold leading-tight mt-0.5">{checkIn.best} hari</p>
+   493→                      </div>
+   494→                      <div className="rounded-lg border border-violet-200/60 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 px-2.5 py-2">
+   495→                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   496→                          <Gift className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden="true" /> Total
+   497→                        </p>
+   498→                        <p className="text-base font-bold leading-tight mt-0.5">{checkIn.total}x</p>
+   499→                      </div>
+   500→                    </div>
+   501→
+   502→                    {/* Papan 30 hari */}
+   503→                    <div className="mt-4 grid grid-cols-6 gap-1.5 sm:grid-cols-10" role="group" aria-label="Papan check-in 30 hari">
+   504→                      {Array.from({ length: 30 }, (_, i) => {
+   505→                        const pos = i + 1;
+   506→                        const isNext = checkIn.canCheckIn && pos === checkIn.nextPosition && checkIn.cycleDone < 30;
+   507→                        return (
+   508→                          <CheckInCell
+   509→                            key={pos}
+   510→                            pos={pos}
+   511→                            done={pos <= checkIn.cycleDone}
+   512→                            isNext={isNext}
+   513→                            checkedToday={!isNext}
+   514→                          />
+   515→                        );
+   516→                      })}
+   517→                    </div>
+   518→                    <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+   519→                      <span className="inline-flex items-center gap-1">
+   520→                        <span className="h-2.5 w-2.5 rounded-[4px] bg-emerald-600" aria-hidden="true" /> Terisi
+   521→                      </span>
+   522→                      <span className="inline-flex items-center gap-1">
+   523→                        <Gift className="h-3 w-3 text-amber-500" aria-hidden="true" /> Milestone (7/14/21/30)
+   524→                      </span>
+   525→                    </div>
+   526→
+   527→                    {/* Aksi check-in — gerbang 1×/24 jam (Ketentuan #1) */}
+   528→                    <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+   529→                      {(() => {
+   530→                        const remMs = checkIn.nextCheckInAt ? new Date(checkIn.nextCheckInAt).getTime() - nowTick : 0;
+   531→                        if (checkIn.canCheckIn) {
+   532→                          return (
+   533→                            <Button
+   534→                              size="sm"
+   535→                              className="bg-amber-500 hover:bg-amber-600 text-white"
+   536→                              disabled={checkingIn}
+   537→                              onClick={() => void doCheckIn()}
+   538→                              aria-label={`Check-In hari ini, hadiah ${checkIn.nextReward} mP`}
+   539→                            >
+   540→                              {checkingIn ? (
+   541→                                <>
+   542→                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Memproses…
+   543→                                </>
+   544→                              ) : (
+   545→                                <>
+   546→                                  <Flame className="h-3.5 w-3.5" aria-hidden="true" /> Check-In Sekarang
+   547→                                </>
+   548→                              )}
+   549→                            </Button>
+   550→                          );
+   551→                        }
+   552→                        return (
+   553→                          <div>
+   554→                            <Button size="sm" variant="secondary" disabled aria-label="Check-In terkunci, 1 kali dalam 24 jam">
+   555→                              <Hourglass className="h-3.5 w-3.5" aria-hidden="true" /> Check-In (1×/24 jam)
+   556→                            </Button>
+   557→                            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+   558→                              {checkIn.checkedToday
+   559→                                ? `Check-In hari ini selesai ✓ — hadiah berikutnya dalam ${formatCountdownId(remMs)}`
+   560→                                : `Bisa Check-In lagi dalam ${formatCountdownId(remMs)} — 1× per 24 jam`}
+   561→                            </p>
+   562→                          </div>
+   563→                        );
+   564→                      })()}
+   565→                      <Badge className="bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900">
+   566→                        {checkIn.checkedToday
+   567→                          ? `Hadiah berikutnya +${formatMp(checkIn.nextReward)} mP`
+   568→                          : `Hari ke-${checkIn.nextPosition}: +${formatMp(checkIn.nextReward)} mP${checkIn.nextIsMilestone ? " 🎁" : ""}`}
+   569→                      </Badge>
+   570→                    </div>
+   571→                    {checkIn.cycleDone >= 30 && checkIn.canCheckIn && (
+   572→                      <p className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-300">
+   573→                        🎉 Siklus 30 hari selesai! Check-In berikutnya memulai siklus baru dari hari ke-1.
+   574→                      </p>
+   575→                    )}
+   576→                  </CardContent>
+   577→                </Card>
+   578→              )}
+   579→
+   580→              {/* ================= WAKTU IBADAH — SEMUA AGAMA ================= */}
+   581→              {data.flags?.fitur_ibadah !== false && (
+   582→              <Card>
+   583→                <CardContent className="p-4">
+   584→                  <div className="flex items-start gap-3">
+   585→                    <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 dark:bg-violet-950/60">
+   586→                      <Church className="h-5 w-5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+   587→                    </div>
+   588→                    <div className="min-w-0 flex-1">
+   589→                      <div className="flex items-center gap-2 flex-wrap">
+   590→                        <p className="font-semibold text-sm">Waktu Ibadah</p>
+   591→                        <Badge className="bg-violet-100 text-violet-700 border border-violet-200 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-900">
+   592→                          Semua Agama
+   593→                        </Badge>
+   594→                      </div>
+   595→                      <p className="text-xs text-muted-foreground mt-0.5">
+   596→                        Jadwal indikatif WIB (Jakarta &amp; sekitarnya) untuk 6 agama — pilih agama Anda agar kegiatan ibadah tampil di jadwal harian.
+   597→                      </p>
+   598→                    </div>
+   599→                  </div>
+   600→
+   601→                  {/* Pemilih agama */}
+   602→                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+   603→                    <span className="text-xs font-medium text-muted-foreground">Agama saya:</span>
+   604→                    <Select
+   605→                      value={data.religion || "none"}
+   606→                      onValueChange={(v) => void setReligion(v)}
+   607→                      disabled={claiming === "__religion__"}
+   608→                    >
+   609→                      <SelectTrigger
+   610→                        className="h-8 w-[190px] text-xs"
+   611→                        aria-label="Pilih agama untuk waktu ibadah"
+   612→                      >
+   613→                        <SelectValue placeholder="Pilih agama (opsional)" />
+   614→                      </SelectTrigger>
+   615→                      <SelectContent>
+   616→                        <SelectItem value="none" className="text-xs">Tidak ditampilkan</SelectItem>
+   617→                        {RELIGIONS.map((r) => (
+   618→                          <SelectItem key={r.key} value={r.key} className="text-xs">
+   619→                            {r.label}
+   620→                          </SelectItem>
+   621→                        ))}
+   622→                      </SelectContent>
+   623→                    </Select>
+   624→                    {claiming === "__religion__" && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-hidden="true" />}
+   625→                  </div>
+   626→                  {!data.religion && (
+   627→                    <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+   628→                      Pilih agama Anda untuk menampilkan kegiatan ibadah di Jadwal Kegiatan Harian.
+   629→                    </p>
+   630→                  )}
+   631→
+   632→                  {/* Daftar waktu ibadah semua agama */}
+   633→                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+   634→                    {RELIGIONS.map((rel) => {
+   635→                      const Icon = RELIGION_ICONS[rel.key] ?? Church;
+   636→                      const items = WORSHIP_SCHEDULE[rel.key];
+   637→                      const total = items.reduce((s, w) => s + w.rewardMp, 0);
+   638→                      const mine = data.religion === rel.key;
+   639→                      return (
+   640→                        <div
+   641→                          key={rel.key}
+   642→                          className={`rounded-xl border p-3 transition-colors ${
+   643→                            mine
+   644→                              ? "border-violet-400 bg-violet-50/60 dark:border-violet-700 dark:bg-violet-950/30"
+   645→                              : "border-border bg-card"
+   646→                          }`}
+   647→                        >
+   648→                          <div className="flex items-center gap-2">
+   649→                            <span className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${mine ? "bg-violet-200 dark:bg-violet-900" : "bg-muted"}`}>
+   650→                              <Icon className="h-4 w-4 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+   651→                            </span>
+   652→                            <p className="text-sm font-semibold">{rel.label}</p>
+   653→                            {mine && (
+   654→                              <Badge className="bg-violet-600 text-white hover:bg-violet-600">Agama Anda</Badge>
+   655→                            )}
+   656→                            <span className="ml-auto text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+   657→                              +{formatMp(total)} mP/hari
+   658→                            </span>
+   659→                          </div>
+   660→                          <div className="mt-2 flex flex-wrap gap-1">
+   661→                            {items.map((w) => (
+   662→                              <span
+   663→                                key={w.key}
+   664→                                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+   665→                              >
+   666→                                <span className="font-bold tabular-nums text-foreground/80">{w.time}</span>
+   667→                                {w.title}
+   668→                              </span>
+   669→                            ))}
+   670→                          </div>
+   671→                        </div>
+   672→                      );
+   673→                    })}
+   674→                  </div>
+   675→                </CardContent>
+   676→              </Card>
+   677→              )}
+   678→
+   679→              {/* ================= JADWAL KEGIATAN HARIAN (03.30 – 23.32 WIB) ================= */}
+   680→              {data.flags?.fitur_jadwal !== false && (
+   681→              <Card>
+   682→                <CardContent className="p-4">
+   683→                  <div className="flex items-start gap-3">
+   684→                    <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 bg-emerald-100 dark:bg-emerald-950/60">
+   685→                      <Clock className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+   686→                    </div>
+   687→                    <div className="min-w-0 flex-1">
+   688→                      <div className="flex items-center gap-2 flex-wrap">
+   689→                        <p className="font-semibold text-sm">Jadwal Kegiatan Harian</p>
+   690→                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900">
+   691→                          {scheduleDone}/{schedule.length} selesai
+   692→                        </Badge>
+   693→                      </div>
+   694→                      <p className="text-xs text-muted-foreground mt-0.5">
+   695→                        Dari Bangun Tidur 03.30 WIB hingga Menjelang Tidur 23.32 WIB — kegiatan terbuka ketika
+   696→                        sudah tiba waktunya (Ketentuan #2), tandai tiap kegiatan, max{" "}
+   697→                        {formatMp(schedule.reduce((s, a) => s + a.rewardMp, 0))} mP/hari.
+   698→                      </p>
+   699→                    </div>
+   700→                  </div>
+   701→
+   702→                  {/* Timeline per sesi */}
+   703→                  <div className="mt-4 space-y-5">
+   704→                    {sessionGroups.map((group) => {
+   705→                      const doneInGroup = group.items.filter((a) => a.done).length;
+   706→                      return (
+   707→                        <section key={group.id} aria-label={`Sesi ${group.label}`}>
+   708→                          <div className="flex items-center gap-2">
+   709→                            <h3 className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+   710→                              {group.label}
+   711→                            </h3>
+   712→                            <span className="text-[10px] text-muted-foreground">{group.range} WIB</span>
+   713→                            <span className="h-px flex-1 bg-border" aria-hidden="true" />
+   714→                            <span className="text-[10px] font-semibold text-muted-foreground">
+   715→                              {doneInGroup}/{group.items.length}
+   716→                            </span>
+   717→                          </div>
+   718→
+   719→                          <ol className="mt-2 space-y-2">
+   720→                            {group.items.map((a) => {
+   721→                              const style = CATEGORY_STYLE[a.category];
+   722→                              const Icon = style.icon;
+   723→                              return (
+   724→                                <li key={a.key} className="flex gap-3">
+   725→                                  {/* Kolom jam */}
+   726→                                  <div className="w-11 shrink-0 pt-2.5 text-right">
+   727→                                    <span
+   728→                                      className={`text-[11px] font-bold tabular-nums ${a.done ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+   729→                                    >
+   730→                                      {a.time}
+   731→                                    </span>
+   732→                                  </div>
+   733→                                  {/* Garis timeline */}
+   734→                                  <div className="relative flex w-4 shrink-0 justify-center" aria-hidden="true">
+   735→                                    <span
+   736→                                      className={`absolute top-0 bottom-0 w-px ${a.done ? "bg-emerald-300 dark:bg-emerald-800" : "bg-border"}`}
+   737→                                    />
+   738→                                    <span
+   739→                                      className={`relative mt-3 h-2.5 w-2.5 rounded-full border-2 border-background ${
+   740→                                        a.done ? "bg-emerald-500" : a.available ? "bg-emerald-200 dark:bg-emerald-900" : "bg-muted-foreground/30"
+   741→                                      }`}
+   742→                                    />
+   743→                                  </div>
+   744→                                  {/* Kartu kegiatan */}
+   745→                                  <div
+   746→                                    className={`flex-1 rounded-xl border p-3 transition-colors ${
+   747→                                      a.done
+   748→                                        ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30"
+   749→                                        : "border-border bg-card"
+   750→                                    }`}
+   751→                                  >
+   752→                                    <div className="flex items-start gap-2.5">
+   753→                                      <span className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${style.chip}`}>
+   754→                                        <Icon className="h-4 w-4" aria-hidden="true" />
+   755→                                      </span>
+   756→                                      <div className="min-w-0 flex-1">
+   757→                                        <div className="flex items-center gap-1.5 flex-wrap">
+   758→                                          <p className={`text-sm font-semibold ${a.done ? "line-through decoration-emerald-600/50" : ""}`}>
+   759→                                            {a.title}
+   760→                                          </p>
+   761→                                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${style.chip}`}>
+   762→                                            {style.label}
+   763→                                          </span>
+   764→                                          {a.religion && (
+   765→                                            <span className="rounded-full border border-violet-300 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700 dark:border-violet-800 dark:text-violet-300">
+   766→                                              {religionLabel(a.religion)}
+   767→                                            </span>
+   768→                                          )}
+   769→                                          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900">
+   770→                                            +{formatMp(a.rewardMp)} mP
+   771→                                          </Badge>
+   772→                                        </div>
+   773→                                        <p className="text-xs text-muted-foreground mt-0.5">{a.desc}</p>
+   774→
+   775→                                        <div className="mt-2">
+   776→                                          {a.done ? (
+   777→                                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
+   778→                                              <Check className="h-3 w-3" aria-hidden="true" /> Selesai
+   779→                                            </span>
+   780→                                          ) : a.available ? (
+   781→                                            <Button
+   782→                                              size="sm"
+   783→                                              variant="outline"
+   784→                                              className="h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950"
+   785→                                              disabled={claiming === a.key}
+   786→                                              onClick={() => void markActivity(a.key)}
+   787→                                              aria-label={`Tandai ${a.title} selesai, hadiah ${a.rewardMp} mP`}
+   788→                                            >
+   789→                                              {claiming === a.key ? (
+   790→                                                <>
+   791→                                                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Menandai…
+   792→                                                </>
+   793→                                              ) : (
+   794→                                                "Tandai Selesai"
+   795→                                              )}
+   796→                                            </Button>
+   797→                                          ) : (
+   798→                                            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+   799→                                              <Lock className="h-3 w-3" aria-hidden="true" />
+   800→                                              {a.requirement}
+   801→                                            </div>
+   802→                                          )}
+   803→                                        </div>
+   804→                                      </div>
+   805→                                    </div>
+   806→                                  </div>
+   807→                                </li>
+   808→                              );
+   809→                            })}
+   810→                          </ol>
+   811→                        </section>
+   812→                      );
+   813→                    })}
+   814→                  </div>
+   815→
+   816→                  {scheduleDone > 0 && (
+   817→                    <p className="mt-3 text-[11px] text-muted-foreground">
+   818→                      Terkumpul dari kegiatan hari ini: <span className="font-semibold text-emerald-700 dark:text-emerald-400">+{formatMp(scheduleMp)} mP</span>
+   819→                    </p>
+   820→                  )}
+   821→                </CardContent>
+   822→              </Card>
+   823→              )}
+   824→
+   825→              {/* ================= RUTINITAS HARIAN (TAMBAHAN) ================= */}
+   826→              {data.flags?.fitur_rutin_harian !== false && (
+   827→              <div>
+   828→                <div className="flex items-center gap-2 px-1 mb-2">
+   829→                  <h2 className="text-sm font-bold">Rutinitas Harian</h2>
+   830→                  <span className="h-px flex-1 bg-border" aria-hidden="true" />
+   831→                  <span className="text-[10px] font-semibold text-muted-foreground">
+   832→                    {claimedCount}/{routines.length} diklaim
+   833→                  </span>
+   834→                </div>
+   835→                <div className="space-y-3">
+   836→                  {routines.map((r) => {
+   837→                    const Icon = ROUTINE_ICONS[r.key] ?? Gift;
+   838→                    return (
+   839→                      <Card key={r.key} className="transition-colors">
+   840→                        <CardContent className="p-4">
+   841→                          <div className="flex items-start gap-3">
+   842→                            <div
+   843→                              className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${
+   844→                                r.claimed
+   845→                                  ? "bg-emerald-100 dark:bg-emerald-900/50"
+   846→                                  : "bg-emerald-50 dark:bg-emerald-950/60"
+   847→                              }`}
+   848→                            >
+   849→                              <Icon className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+   850→                            </div>
+   851→                            <div className="min-w-0 flex-1">
+   852→                              <div className="flex items-center gap-2 flex-wrap">
+   853→                                <p className="font-semibold text-sm">{r.title}</p>
+   854→                                <Badge className="bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900">
+   855→                                  +{formatMp(r.rewardMp)} mP
+   856→                                </Badge>
+   857→                              </div>
+   858→                              <p className="text-xs text-muted-foreground mt-0.5">{r.description}</p>
+   859→
+   860→                              <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+   861→                                {r.claimed ? (
+   862→                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+   863→                                    <Check className="h-3.5 w-3.5" aria-hidden="true" /> Diklaim ✓
+   864→                                  </span>
+   865→                                ) : (
+   866→                                  <div>
+   867→                                    <Button
+   868→                                      size="sm"
+   869→                                      className="bg-emerald-600 hover:bg-emerald-700"
+   870→                                      disabled={!r.available || claiming === r.key}
+   871→                                      onClick={() => void claim(r.key)}
+   872→                                    >
+   873→                                      {claiming === r.key ? (
+   874→                                        <>
+   875→                                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Mengklaim…
+   876→                                        </>
+   877→                                      ) : !r.available ? (
+   878→                                        <>
+   879→                                          <Lock className="h-3.5 w-3.5" aria-hidden="true" /> Terkunci
+   880→                                        </>
+   881→                                      ) : (
+   882→                                        "Klaim"
+   883→                                      )}
+   884→                                    </Button>
+   885→                                    {!r.available && r.requirement && (
+   886→                                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+   887→                                        {r.requirement}
+   888→                                      </p>
+   889→                                    )}
+   890→                                  </div>
+   891→                                )}
+   892→                              </div>
+   893→                            </div>
+   894→                          </div>
+   895→                        </CardContent>
+   896→                      </Card>
+   897→                    );
+   898→                  })}
+   899→                </div>
+   900→              </div>
+   901→              )}
+   902→            </>
+   903→          )}
+   904→        </div>
+   905→      </div>
+   906→    </div>
+   907→  );
+   908→}
+   909→

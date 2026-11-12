@@ -1,0 +1,690 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useState } from "react";
+     4→     4→import {
+     5→     5→  Store,
+     6→     6→  Camera,
+     7→     7→  Image as ImageIcon,
+     8→     8→  Trash2,
+     9→     9→  Loader2,
+    10→    10→  Save,
+    11→    11→  MapPin,
+    12→    12→  Clock,
+    13→    13→  Phone,
+    14→    14→  Mail,
+    15→    15→  Globe,
+    16→    16→  Instagram,
+    17→    17→  Facebook,
+    18→    18→  Music2,
+    19→    19→  ExternalLink,
+    20→    20→  ShieldCheck,
+    21→    21→  StoreIcon,
+    22→    22→} from "lucide-react";
+    23→    23→import { cn } from "@/lib/wa-utils";
+    24→    24→import { useToast } from "@/hooks/use-toast";
+    25→    25→import ViewHeader from "@/components/business/ViewHeader";
+    26→    26→import WaImg from "@/components/business/WaImg";
+    27→    27→import { Skeleton } from "@/components/ui/skeleton";
+    28→    28→import { Button } from "@/components/ui/button";
+    29→    29→import { Input } from "@/components/ui/input";
+    30→    30→import { Label } from "@/components/ui/label";
+    31→    31→import { Textarea } from "@/components/ui/textarea";
+    32→    32→import { Switch } from "@/components/ui/switch";
+    33→    33→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    34→    34→import { Card, CardContent } from "@/components/ui/card";
+    35→    35→import { uploadImage } from "@/lib/upload";
+    36→    36→import { useIsDesktop } from "@/lib/useIsDesktop";
+    37→    37→import { defaultHours, parseHours, type HourRow, type Profile } from "@/components/business/types";
+    38→    38→
+    39→    39→interface FormState {
+    40→    40→  businessName: string;
+    41→    41→  ownerName: string;
+    42→    42→  category: string;
+    43→    43→  description: string;
+    44→    44→  address: string;
+    45→    45→  lat: string;
+    46→    46→  lng: string;
+    47→    47→  email: string;
+    48→    48→  website: string;
+    49→    49→  instagram: string;
+    50→    50→  facebook: string;
+    51→    51→  tiktok: string;
+    52→    52→  logoUrl: string;
+    53→    53→  coverUrl: string;
+    54→    54→}
+    55→    55→
+    56→    56→const EMPTY_FORM: FormState = {
+    57→    57→  businessName: "",
+    58→    58→  ownerName: "",
+    59→    59→  category: "",
+    60→    60→  description: "",
+    61→    61→  address: "",
+    62→    62→  lat: "",
+    63→    63→  lng: "",
+    64→    64→  email: "",
+    65→    65→  website: "",
+    66→    66→  instagram: "",
+    67→    67→  facebook: "",
+    68→    68→  tiktok: "",
+    69→    69→  logoUrl: "/images/logo.png",
+    70→    70→  coverUrl: "",
+    71→    71→};
+    72→    72→
+    73→    73→function todayIndex(): number {
+    74→    74→  return (new Date().getDay() + 6) % 7; // Senin = 0
+    75→    75→}
+    76→    76→
+    77→    77→export default function BusinessProfileView() {
+    78→    78→  const { toast } = useToast();
+    79→    79→  const [loading, setLoading] = useState(true);
+    80→    80→  const [saving, setSaving] = useState(false);
+    81→    81→  const [profile, setProfile] = useState<Profile | null>(null);
+    82→    82→  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+    83→    83→  const [hoursRows, setHoursRows] = useState<HourRow[]>(defaultHours());
+    84→    84→
+    85→    85→  const load = useCallback(async () => {
+    86→    86→    setLoading(true);
+    87→    87→    try {
+    88→    88→      const res = await fetch("/api/profile", { cache: "no-store" });
+    89→    89→      const data = await res.json();
+    90→    90→      if (!res.ok) throw new Error(data.error || "Gagal memuat profil");
+    91→    91→      const p: Profile = data.profile;
+    92→    92→      setProfile(p);
+    93→    93→      setForm({
+    94→    94→        businessName: p.businessName ?? "",
+    95→    95→        ownerName: p.ownerName ?? "",
+    96→    96→        category: p.category ?? "",
+    97→    97→        description: p.description ?? "",
+    98→    98→        address: p.address ?? "",
+    99→    99→        lat: String(p.lat ?? ""),
+   100→   100→        lng: String(p.lng ?? ""),
+   101→   101→        email: p.email ?? "",
+   102→   102→        website: p.website ?? "",
+   103→   103→        instagram: p.instagram ?? "",
+   104→   104→        facebook: p.facebook ?? "",
+   105→   105→        tiktok: p.tiktok ?? "",
+   106→   106→        logoUrl: p.logoUrl || "/images/logo.png",
+   107→   107→        coverUrl: p.coverUrl ?? "",
+   108→   108→      });
+   109→   109→      setHoursRows(parseHours(p.hours));
+   110→   110→    } catch (e) {
+   111→   111→      toast({
+   112→   112→        title: "Gagal memuat profil",
+   113→   113→        description: e instanceof Error ? e.message : "Coba muat ulang halaman",
+   114→   114→        variant: "destructive",
+   115→   115→      });
+   116→   116→    } finally {
+   117→   117→      setLoading(false);
+   118→   118→    }
+   119→   119→  }, [toast]);
+   120→   120→
+   121→   121→  useEffect(() => {
+   122→   122→    load();
+   123→   123→  }, [load]);
+   124→   124→
+   125→   125→  const patch = (p: Partial<FormState>) => setForm((prev) => ({ ...prev, ...p }));
+   126→   126→
+   127→   127→  const handleLogoFile = async (file: File) => {
+   128→   128→    try {
+   129→   129→      // Batch 4: logo diunggah ke server (URL), bukan base64 di DB
+   130→   130→      patch({ logoUrl: await uploadImage(file, "logo") });
+   131→   131→      toast({ title: "Logo diperbarui", description: "Jangan lupa simpan perubahan." });
+   132→   132→    } catch (e) {
+   133→   133→      toast({
+   134→   134→        title: "Gagal memuat logo",
+   135→   135→        description: e instanceof Error ? e.message : "Coba gambar lain",
+   136→   136→        variant: "destructive",
+   137→   137→      });
+   138→   138→    }
+   139→   139→  };
+   140→   140→
+   141→   141→  const handleCoverFile = async (file: File) => {
+   142→   142→    try {
+   143→   143→      // Latar (cover) profil diunggah ke server (URL), bukan base64 di DB
+   144→   144→      patch({ coverUrl: await uploadImage(file, "cover") });
+   145→   145→      toast({ title: "Latar belakang diperbarui", description: "Jangan lupa simpan perubahan." });
+   146→   146→    } catch (e) {
+   147→   147→      toast({
+   148→   148→        title: "Gagal memuat latar belakang",
+   149→   149→        description: e instanceof Error ? e.message : "Coba gambar lain",
+   150→   150→        variant: "destructive",
+   151→   151→      });
+   152→   152→    }
+   153→   153→  };
+   154→   154→
+   155→   155→  const handleSave = async () => {
+   156→   156→    if (!form.businessName.trim()) {
+   157→   157→      toast({ title: "Nama bisnis wajib diisi", variant: "destructive" });
+   158→   158→      return;
+   159→   159→    }
+   160→   160→    setSaving(true);
+   161→   161→    try {
+   162→   162→      const res = await fetch("/api/profile", {
+   163→   163→        method: "PATCH",
+   164→   164→        headers: { "Content-Type": "application/json" },
+   165→   165→        body: JSON.stringify({
+   166→   166→          businessName: form.businessName.trim(),
+   167→   167→          ownerName: form.ownerName.trim(),
+   168→   168→          category: form.category.trim(),
+   169→   169→          description: form.description,
+   170→   170→          address: form.address.trim(),
+   171→   171→          lat: parseFloat(form.lat) || 0,
+   172→   172→          lng: parseFloat(form.lng) || 0,
+   173→   173→          email: form.email.trim(),
+   174→   174→          website: form.website.trim(),
+   175→   175→          instagram: form.instagram.replace(/^@+/, "").trim(),
+   176→   176→          facebook: form.facebook
+   177→   177→            .replace(/^https?:\/\/(www\.)?facebook\.com\//i, "")
+   178→   178→            .replace(/^\/+/, "")
+   179→   179→            .trim(),
+   180→   180→          tiktok: form.tiktok.replace(/^@+/, "").trim(),
+   181→   181→          hours: JSON.stringify(hoursRows),
+   182→   182→          logoUrl: form.logoUrl,
+   183→   183→          coverUrl: form.coverUrl,
+   184→   184→        }),
+   185→   185→      });
+   186→   186→      const data = await res.json();
+   187→   187→      if (!res.ok) throw new Error(data.error || "Gagal menyimpan profil");
+   188→   188→      setProfile(data.profile);
+   189→   189→      // Beri tahu seluruh aplikasi (sidebar, header, layar keluar) bahwa profil berubah
+   190→   190→      window.dispatchEvent(new CustomEvent("wa:profile-updated"));
+   191→   191→      toast({ title: "Profil disimpan", description: "Informasi bisnis berhasil diperbarui." });
+   192→   192→    } catch (e) {
+   193→   193→      toast({
+   194→   194→        title: "Gagal menyimpan",
+   195→   195→        description: e instanceof Error ? e.message : "Coba lagi",
+   196→   196→        variant: "destructive",
+   197→   197→      });
+   198→   198→    } finally {
+   199→   199→      setSaving(false);
+   200→   200→    }
+   201→   201→  };
+   202→   202→
+   203→   203→  const formProps = { form, patch, hoursRows, setHoursRows, phone: profile?.phone ?? "", onSave: handleSave, saving, onLogoFile: handleLogoFile, onCoverFile: handleCoverFile };
+   204→   204→  const previewProps = { form, hoursRows, phone: profile?.phone ?? "", verified: profile?.verified ?? false, category: profile?.category ?? "" };
+   205→   205→  const isDesktop = useIsDesktop();
+   206→   206→
+   207→   207→  return (
+   208→   208→    <div className="h-full flex flex-col">
+   209→   209→      {/* Header view hanya desktop — di mobile dihapus (judul sudah tampil di panel header atas,
+   210→   210→          sesuai anotasi screenshot "Hapus Bagian Ini"). */}
+   211→   211→      {isDesktop && (
+   212→   212→        <ViewHeader icon={Store} title="Profil Bisnis" subtitle="Kelola informasi toko yang dilihat pelanggan" />
+   213→   213→      )}
+   214→   214→
+   215→   215→      {loading ? (
+   216→   216→        <div className="flex-1 overflow-y-auto wa-scrollbar p-4 sm:p-6">
+   217→   217→          <div className="max-w-3xl mx-auto space-y-4">
+   218→   218→            <div className="flex items-center gap-4">
+   219→   219→              <Skeleton className="h-20 w-20 rounded-2xl" />
+   220→   220→              <div className="space-y-2">
+   221→   221→                <Skeleton className="h-4 w-40" />
+   222→   222→                <Skeleton className="h-3 w-52" />
+   223→   223→              </div>
+   224→   224→            </div>
+   225→   225→            <Skeleton className="h-12 w-full" />
+   226→   226→            <Skeleton className="h-12 w-full" />
+   227→   227→            <Skeleton className="h-28 w-full" />
+   228→   228→            <Skeleton className="h-64 w-full" />
+   229→   229→          </div>
+   230→   230→        </div>
+   231→   231→      ) : !profile ? (
+   232→   232→        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Profil tidak tersedia.</div>
+   233→   233→      ) : (
+   234→   234→        <div className="flex-1 min-h-0 overflow-y-auto wa-scrollbar">
+   235→   235→          {isDesktop ? (
+   236→   236→            /* Desktop: edit + pratinjau berdampingan */
+   237→   237→            <div className="p-4 sm:p-6">
+   238→   238→              <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-5">
+   239→   239→                <div className="lg:col-span-3">
+   240→   240→                  <ProfileForm {...formProps} />
+   241→   241→                </div>
+   242→   242→                <div className="lg:col-span-2">
+   243→   243→                  <ProfilePreview {...previewProps} />
+   244→   244→                </div>
+   245→   245→              </div>
+   246→   246→            </div>
+   247→   247→          ) : (
+   248→   248→            /* Mobile/tablet: Tabs Pratinjau / Edit (Pratinjau dulu, lalu Edit) */
+   249→   249→            <div className="p-4 sm:p-6">
+   250→   250→              <Tabs defaultValue="edit">
+   251→   251→                <TabsList className="grid w-full grid-cols-2 mb-4">
+   252→   252→                  <TabsTrigger value="preview">Pratinjau</TabsTrigger>
+   253→   253→                  <TabsTrigger value="edit">Edit</TabsTrigger>
+   254→   254→                </TabsList>
+   255→   255→                <TabsContent value="preview">
+   256→   256→                  <ProfilePreview {...previewProps} />
+   257→   257→                </TabsContent>
+   258→   258→                <TabsContent value="edit">
+   259→   259→                  <ProfileForm {...formProps} />
+   260→   260→                </TabsContent>
+   261→   261→              </Tabs>
+   262→   262→            </div>
+   263→   263→          )}
+   264→   264→        </div>
+   265→   265→      )}
+   266→   266→    </div>
+   267→   267→  );
+   268→   268→}
+   269→   269→
+   270→   270→// ===================== FORM =====================
+   271→   271→
+   272→   272→interface ProfileFormProps {
+   273→   273→  form: FormState;
+   274→   274→  patch: (p: Partial<FormState>) => void;
+   275→   275→  hoursRows: HourRow[];
+   276→   276→  setHoursRows: React.Dispatch<React.SetStateAction<HourRow[]>>;
+   277→   277→  phone: string;
+   278→   278→  onSave: () => void;
+   279→   279→  saving: boolean;
+   280→   280→  onLogoFile: (file: File) => void;
+   281→   281→  onCoverFile: (file: File) => void;
+   282→   282→}
+   283→   283→
+   284→   284→function ProfileForm({ form, patch, hoursRows, setHoursRows, phone, onSave, saving, onLogoFile, onCoverFile }: ProfileFormProps) {
+   285→   285→  const setHour = (idx: number, p: Partial<HourRow>) =>
+   286→   286→    setHoursRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+   287→   287→
+   288→   288→  const latNum = parseFloat(form.lat);
+   289→   289→  const lngNum = parseFloat(form.lng);
+   290→   290→  const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum);
+   291→   291→
+   292→   292→  return (
+   293→   293→    <Card>
+   294→   294→      <CardContent className="p-4 sm:p-6 space-y-6">
+   295→   295→        {/* Logo */}
+   296→   296→        <div className="flex items-center gap-4">
+   297→   297→          <div className="relative shrink-0">
+   298→   298→            <WaImg
+   299→   299→              src={form.logoUrl || "/images/logo.png"}
+   300→   300→              alt="Logo bisnis"
+   301→   301→              className="h-20 w-20 rounded-2xl object-cover ring-1 ring-border bg-muted"
+   302→   302→            />
+   303→   303→            <label
+   304→   304→              className="absolute -bottom-1.5 -right-1.5 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-md hover:bg-primary/90 transition-colors"
+   305→   305→              title="Ubah logo"
+   306→   306→            >
+   307→   307→              <Camera className="h-4 w-4" aria-hidden="true" />
+   308→   308→              <span className="sr-only">Ubah logo bisnis</span>
+   309→   309→              <input
+   310→   310→                type="file"
+   311→   311→                accept="image/*"
+   312→   312→                className="sr-only"
+   313→   313→                onChange={(e) => {
+   314→   314→                  const f = e.target.files?.[0];
+   315→   315→                  if (f) onLogoFile(f);
+   316→   316→                  e.target.value = "";
+   317→   317→                }}
+   318→   318→              />
+   319→   319→            </label>
+   320→   320→          </div>
+   321→   321→          <div className="min-w-0">
+   322→   322→            <p className="text-sm font-medium">Logo bisnis</p>
+   323→   323→            <p className="text-xs text-muted-foreground">Tampil di profil & chat pelanggan. PNG/JPG, maks 30 MB.</p>
+   324→   324→          </div>
+   325→   325→        </div>
+   326→   326→
+   327→   327→        {/* Latar belakang (cover) — sesuai permintaan: latar kartu profil dapat diganti */}
+   328→   328→        <div className="flex items-center gap-4">
+   329→   329→          <div className="relative shrink-0">
+   330→   330→            {form.coverUrl ? (
+   331→   331→              <WaImg
+   332→   332→                src={form.coverUrl}
+   333→   333→                alt="Latar belakang profil bisnis"
+   334→   334→                className="h-20 w-36 rounded-xl object-cover ring-1 ring-border bg-muted"
+   335→   335→              />
+   336→   336→            ) : (
+   337→   337→              <div
+   338→   338→                className="h-20 w-36 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center"
+   339→   339→                aria-hidden="true"
+   340→   340→              >
+   341→   341→                <ImageIcon className="h-6 w-6 text-white/70" />
+   342→   342→              </div>
+   343→   343→            )}
+   344→   344→            <label
+   345→   345→              className="absolute -bottom-1.5 -right-1.5 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-md hover:bg-primary/90 transition-colors"
+   346→   346→              title="Ubah latar belakang"
+   347→   347→            >
+   348→   348→              <Camera className="h-4 w-4" aria-hidden="true" />
+   349→   349→              <span className="sr-only">Ubah latar belakang profil bisnis</span>
+   350→   350→              <input
+   351→   351→                type="file"
+   352→   352→                accept="image/*"
+   353→   353→                className="sr-only"
+   354→   354→                onChange={(e) => {
+   355→   355→                  const f = e.target.files?.[0];
+   356→   356→                  if (f) onCoverFile(f);
+   357→   357→                  e.target.value = "";
+   358→   358→                }}
+   359→   359→              />
+   360→   360→            </label>
+   361→   361→          </div>
+   362→   362→          <div className="min-w-0">
+   363→   363→            <p className="text-sm font-medium">Latar belakang</p>
+   364→   364→            <p className="text-xs text-muted-foreground">Tampil di kepala kartu profil. PNG/JPG, maks 30 MB.</p>
+   365→   365→            {form.coverUrl ? (
+   366→   366→              <Button
+   367→   367→                variant="ghost"
+   368→   368→                size="sm"
+   369→   369→                className="mt-1 h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40"
+   370→   370→                onClick={() => patch({ coverUrl: "" })}
+   371→   371→              >
+   372→   372→                <Trash2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" /> Hapus latar
+   373→   373→              </Button>
+   374→   374→            ) : null}
+   375→   375→          </div>
+   376→   376→        </div>
+   377→   377→
+   378→   378→        {/* Identitas */}
+   379→   379→        <div className="grid gap-4 sm:grid-cols-2">
+   380→   380→          <div className="space-y-1.5 sm:col-span-2">
+   381→   381→            <Label htmlFor="bp-name">Nama bisnis</Label>
+   382→   382→            <Input id="bp-name" value={form.businessName} onChange={(e) => patch({ businessName: e.target.value })} placeholder="IndiGoo" />
+   383→   383→          </div>
+   384→   384→          <div className="space-y-1.5">
+   385→   385→            <Label htmlFor="bp-owner">Nama pemilik</Label>
+   386→   386→            <Input id="bp-owner" value={form.ownerName} onChange={(e) => patch({ ownerName: e.target.value })} placeholder="Pak Jaya Santoso" />
+   387→   387→          </div>
+   388→   388→          <div className="space-y-1.5">
+   389→   389→            <Label htmlFor="bp-category">Kategori</Label>
+   390→   390→            <Input id="bp-category" value={form.category} onChange={(e) => patch({ category: e.target.value })} placeholder="Toko Souvenir & Pangan Olahan" />
+   391→   391→          </div>
+   392→   392→          <div className="space-y-1.5 sm:col-span-2">
+   393→   393→            <Label htmlFor="bp-desc">Deskripsi</Label>
+   394→   394→            <Textarea
+   395→   395→              id="bp-desc"
+   396→   396→              rows={3}
+   397→   397→              value={form.description}
+   398→   398→              onChange={(e) => patch({ description: e.target.value })}
+   399→   399→              placeholder="Ceritakan tentang bisnis Anda..."
+   400→   400→            />
+   401→   401→          </div>
+   402→   402→        </div>
+   403→   403→
+   404→   404→        {/* Alamat & koordinat */}
+   405→   405→        <div className="space-y-4">
+   406→   406→          <p className="text-sm font-semibold text-foreground/90">Alamat</p>
+   407→   407→          <div className="space-y-1.5">
+   408→   408→            <Label htmlFor="bp-address">Alamat lengkap</Label>
+   409→   409→            <Input id="bp-address" value={form.address} onChange={(e) => patch({ address: e.target.value })} placeholder="Jl. Malioboro No. 123, Yogyakarta" />
+   410→   410→          </div>
+   411→   411→          <div className="grid gap-4 sm:grid-cols-2">
+   412→   412→            <div className="space-y-1.5">
+   413→   413→              <Label htmlFor="bp-lat">Latitude</Label>
+   414→   414→              <Input id="bp-lat" type="number" step="any" inputMode="decimal" value={form.lat} onChange={(e) => patch({ lat: e.target.value })} placeholder="-7.7956" />
+   415→   415→            </div>
+   416→   416→            <div className="space-y-1.5">
+   417→   417→              <Label htmlFor="bp-lng">Longitude</Label>
+   418→   418→              <Input id="bp-lng" type="number" step="any" inputMode="decimal" value={form.lng} onChange={(e) => patch({ lng: e.target.value })} placeholder="110.3695" />
+   419→   419→            </div>
+   420→   420→          </div>
+   421→   421→          {hasCoords ? (
+   422→   422→            <a
+   423→   423→              href={`https://www.google.com/maps?q=${latNum},${lngNum}`}
+   424→   424→              target="_blank"
+   425→   425→              rel="noreferrer"
+   426→   426→              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+   427→   427→            >
+   428→   428→              <MapPin className="h-4 w-4" aria-hidden="true" />
+   429→   429→              Lihat di Google Maps
+   430→   430→              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+   431→   431→            </a>
+   432→   432→          ) : (
+   433→   433→            <p className="text-xs text-muted-foreground">Isi latitude & longitude untuk pratinjau lokasi di Google Maps.</p>
+   434→   434→          )}
+   435→   435→        </div>
+   436→   436→
+   437→   437→        {/* Kontak */}
+   438→   438→        <div className="grid gap-4 sm:grid-cols-2">
+   439→   439→          <div className="space-y-1.5">
+   440→   440→            <Label htmlFor="bp-email">Email bisnis</Label>
+   441→   441→            <Input id="bp-email" type="email" value={form.email} onChange={(e) => patch({ email: e.target.value })} placeholder="halo@indigoo.id" />
+   442→   442→          </div>
+   443→   443→          <div className="space-y-1.5">
+   444→   444→            <Label htmlFor="bp-website">Website</Label>
+   445→   445→            <Input id="bp-website" value={form.website} onChange={(e) => patch({ website: e.target.value })} placeholder="https://indigoo.id" />
+   446→   446→          </div>
+   447→   447→          <div className="space-y-1.5 sm:col-span-2">
+   448→   448→            <Label>Nomor telepon (WhatsApp)</Label>
+   449→   449→            <div className="flex items-center gap-2 rounded-md border border-input bg-muted/50 px-3 h-9 text-sm text-muted-foreground">
+   450→   450→              <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
+   451→   451→              {phone || "—"}
+   452→   452→              <span className="ml-auto text-[11px]">tidak dapat diubah</span>
+   453→   453→            </div>
+   454→   454→          </div>
+   455→   455→        </div>
+   456→   456→
+   457→   457→        {/* Media sosial */}
+   458→   458→        <div className="space-y-4">
+   459→   459→          <p className="text-sm font-semibold text-foreground/90">Media Sosial</p>
+   460→   460→          <div className="grid gap-4 sm:grid-cols-3">
+   461→   461→            <div className="space-y-1.5">
+   462→   462→              <Label htmlFor="bp-ig">Instagram</Label>
+   463→   463→              <div className="relative">
+   464→   464→                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none" aria-hidden="true">@</span>
+   465→   465→                <Input id="bp-ig" className="pl-8" value={form.instagram} onChange={(e) => patch({ instagram: e.target.value })} placeholder="indigoo" />
+   466→   466→              </div>
+   467→   467→            </div>
+   468→   468→            <div className="space-y-1.5">
+   469→   469→              <Label htmlFor="bp-fb">Facebook</Label>
+   470→   470→              <div className="relative">
+   471→   471→                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none" aria-hidden="true">fb.com/</span>
+   472→   472→                <Input id="bp-fb" className="pl-14" value={form.facebook} onChange={(e) => patch({ facebook: e.target.value })} placeholder="IndiGoo" />
+   473→   473→              </div>
+   474→   474→            </div>
+   475→   475→            <div className="space-y-1.5">
+   476→   476→              <Label htmlFor="bp-tt">TikTok</Label>
+   477→   477→              <div className="relative">
+   478→   478→                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none" aria-hidden="true">@</span>
+   479→   479→                <Input id="bp-tt" className="pl-8" value={form.tiktok} onChange={(e) => patch({ tiktok: e.target.value })} placeholder="indigoo" />
+   480→   480→              </div>
+   481→   481→            </div>
+   482→   482→          </div>
+   483→   483→        </div>
+   484→   484→
+   485→   485→        {/* Jam operasional */}
+   486→   486→        <div className="space-y-3">
+   487→   487→          <div>
+   488→   488→            <p className="text-sm font-semibold text-foreground/90">Jam Operasional</p>
+   489→   489→            <p className="text-xs text-muted-foreground">Atur hari & jam buka toko.</p>
+   490→   490→          </div>
+   491→   491→          <div className="rounded-xl border border-border divide-y">
+   492→   492→            {hoursRows.map((row, idx) => (
+   493→   493→              <div key={row.day} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
+   494→   494→                <span className="w-16 shrink-0 text-sm font-medium">{row.day}</span>
+   495→   495→                <div className="flex items-center gap-2">
+   496→   496→                  <Switch
+   497→   497→                    checked={!row.closed}
+   498→   498→                    onCheckedChange={(v) => setHour(idx, { closed: !v })}
+   499→   499→                    aria-label={`Buka atau tutup pada hari ${row.day}`}
+   500→   500→                  />
+   501→   501→                  <span className={cn("text-xs w-10", row.closed ? "text-red-500" : "text-emerald-600")}>{row.closed ? "Tutup" : "Buka"}</span>
+   502→   502→                </div>
+   503→   503→                <div className={cn("flex items-center gap-2 ml-auto transition-opacity", row.closed && "opacity-40")}>
+   504→   504→                  <Input
+   505→   505→                    type="time"
+   506→   506→                    value={row.open}
+   507→   507→                    disabled={row.closed}
+   508→   508→                    onChange={(e) => setHour(idx, { open: e.target.value })}
+   509→   509→                    className="w-[106px] h-8 text-sm"
+   510→   510→                    aria-label={`Jam buka hari ${row.day}`}
+   511→   511→                  />
+   512→   512→                  <span className="text-xs text-muted-foreground" aria-hidden="true">–</span>
+   513→   513→                  <Input
+   514→   514→                    type="time"
+   515→   515→                    value={row.close}
+   516→   516→                    disabled={row.closed}
+   517→   517→                    onChange={(e) => setHour(idx, { close: e.target.value })}
+   518→   518→                    className="w-[106px] h-8 text-sm"
+   519→   519→                    aria-label={`Jam tutup hari ${row.day}`}
+   520→   520→                  />
+   521→   521→                </div>
+   522→   522→              </div>
+   523→   523→            ))}
+   524→   524→          </div>
+   525→   525→        </div>
+   526→   526→
+   527→   527→        <div className="flex justify-end border-t pt-4">
+   528→   528→          <Button onClick={onSave} disabled={saving} className="min-w-36">
+   529→   529→            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+   530→   530→            {saving ? "Menyimpan..." : "Simpan Profil"}
+   531→   531→          </Button>
+   532→   532→        </div>
+   533→   533→      </CardContent>
+   534→   534→    </Card>
+   535→   535→  );
+   536→   536→}
+   537→   537→
+   538→   538→// ===================== PRATINJAU =====================
+   539→   539→
+   540→   540→interface ProfilePreviewProps {
+   541→   541→  form: FormState;
+   542→   542→  hoursRows: HourRow[];
+   543→   543→  phone: string;
+   544→   544→  verified: boolean;
+   545→   545→  category: string;
+   546→   546→}
+   547→   547→
+   548→   548→function ProfilePreview({ form, hoursRows, phone, verified, category }: ProfilePreviewProps) {
+   549→   549→  const today = todayIndex();
+   550→   550→  const hasSocial = Boolean(form.instagram || form.facebook || form.tiktok);
+   551→   551→  const websiteUrl = form.website
+   552→   552→    ? form.website.startsWith("http")
+   553→   553→      ? form.website
+   554→   554→      : `https://${form.website}`
+   555→   555→    : "";
+   556→   556→
+   557→   557→  return (
+   558→   558→    <Card className="overflow-hidden lg:sticky lg:top-0">
+   559→   559→      <div className="relative overflow-hidden bg-primary px-6 pt-8 pb-6 flex flex-col items-center text-center text-primary-foreground">
+   560→   560→        {form.coverUrl ? (
+   561→   561→          <>
+   562→   562→            {/* Latar belakang kustom (Task 42): foto menutupi kepala kartu + gradasi gelap agar teks terbaca */}
+   563→   563→            <WaImg
+   564→   564→              src={form.coverUrl}
+   565→   565→              alt=""
+   566→   566→              className="absolute inset-0 h-full w-full object-cover"
+   567→   567→            />
+   568→   568→            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/25 to-black/35" aria-hidden="true" />
+   569→   569→          </>
+   570→   570→        ) : null}
+   571→   571→        <div className="relative z-10 flex flex-col items-center">
+   572→   572→        <WaImg
+   573→   573→          src={form.logoUrl || "/images/logo.png"}
+   574→   574→          alt={`Logo ${form.businessName || "bisnis"}`}
+   575→   575→          className="h-20 w-20 rounded-full object-cover ring-2 ring-white/40 bg-white/10"
+   576→   576→        />
+   577→   577→        <p className="mt-3 text-lg font-semibold leading-tight break-words">{form.businessName || "Nama Bisnis"}</p>
+   578→   578→        <p className="mt-0.5 text-xs text-primary-foreground/85">{form.category || category || "Kategori bisnis"}</p>
+   579→   579→        {verified ? (
+   580→   580→          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-medium">
+   581→   581→            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Bisnis Terverifikasi
+   582→   582→          </span>
+   583→   583→        ) : null}
+   584→   584→        </div>
+   585→   585→      </div>
+   586→   586→
+   587→   587→      <CardContent className="p-5 space-y-5">
+   588→   588→        {form.description ? (
+   589→   589→          <section>
+   590→   590→            <p className="text-xs font-medium text-muted-foreground mb-1">Deskripsi</p>
+   591→   591→            <p className="text-sm whitespace-pre-wrap break-words text-justify">{form.description}</p>
+   592→   592→          </section>
+   593→   593→        ) : null}
+   594→   594→
+   595→   595→        {form.address || hasCoords(form.lat, form.lng) ? (
+   596→   596→          <section>
+   597→   597→            <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+   598→   598→              <MapPin className="h-3.5 w-3.5" aria-hidden="true" /> Alamat
+   599→   599→            </p>
+   600→   600→            {form.address ? <p className="text-sm text-justify">{form.address}</p> : null}
+   601→   601→            {hasCoords(form.lat, form.lng) ? (
+   602→   602→              <a
+   603→   603→                href={`https://www.google.com/maps?q=${parseFloat(form.lat)},${parseFloat(form.lng)}`}
+   604→   604→                target="_blank"
+   605→   605→                rel="noreferrer"
+   606→   606→                className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+   607→   607→              >
+   608→   608→                {form.lat || 0}, {form.lng || 0} — Lihat di Google Maps
+   609→   609→                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+   610→   610→              </a>
+   611→   611→            ) : null}
+   612→   612→          </section>
+   613→   613→        ) : null}
+   614→   614→
+   615→   615→        <section>
+   616→   616→          <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+   617→   617→            <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Jam Operasional
+   618→   618→          </p>
+   619→   619→          <div className="divide-y rounded-lg border px-3 py-1">
+   620→   620→            {hoursRows.map((row, i) => (
+   621→   621→              <div key={row.day} className="flex items-center justify-between py-1.5 text-sm">
+   622→   622→                <span className={cn(i === today && "font-semibold")}>
+   623→   623→                  {row.day}
+   624→   624→                  {i === today && <span className="ml-1.5 text-[10px] font-medium text-primary">Hari ini</span>}
+   625→   625→                </span>
+   626→   626→                <span className={cn("text-xs", row.closed ? "text-red-500 font-medium" : "text-muted-foreground")}>
+   627→   627→                  {row.closed ? "Tutup" : `${row.open} – ${row.close}`}
+   628→   628→                </span>
+   629→   629→              </div>
+   630→   630→            ))}
+   631→   631→          </div>
+   632→   632→        </section>
+   633→   633→
+   634→   634→        <section className="space-y-2">
+   635→   635→          <p className="text-xs font-medium text-muted-foreground">Kontak</p>
+   636→   636→          {phone ? (
+   637→   637→            <p className="flex items-center gap-2 text-sm">
+   638→   638→              <Phone className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" /> {phone}
+   639→   639→            </p>
+   640→   640→          ) : null}
+   641→   641→          {form.email ? (
+   642→   642→            <p className="flex items-center gap-2 text-sm break-all">
+   643→   643→              <Mail className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" /> {form.email}
+   644→   644→            </p>
+   645→   645→          ) : null}
+   646→   646→          {form.website ? (
+   647→   647→            <a href={websiteUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline break-all">
+   648→   648→              <Globe className="h-4 w-4 shrink-0" aria-hidden="true" /> {form.website}
+   649→   649→            </a>
+   650→   650→          ) : null}
+   651→   651→          {!phone && !form.email && !form.website ? <p className="text-sm text-muted-foreground">Belum ada info kontak.</p> : null}
+   652→   652→        </section>
+   653→   653→
+   654→   654→        <section>
+   655→   655→          <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+   656→   656→            <StoreIcon className="h-3.5 w-3.5" aria-hidden="true" /> Media Sosial
+   657→   657→          </p>
+   658→   658→          {hasSocial ? (
+   659→   659→            <div className="space-y-2">
+   660→   660→              {form.instagram ? (
+   661→   661→                <p className="flex items-center gap-2 text-sm">
+   662→   662→                  <Instagram className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" /> @{form.instagram.replace(/^@+/, "")}
+   663→   663→                </p>
+   664→   664→              ) : null}
+   665→   665→              {form.facebook ? (
+   666→   666→                <p className="flex items-center gap-2 text-sm break-all">
+   667→   667→                  <Facebook className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" /> fb.com/{form.facebook.replace(/^https?:\/\/(www\.)?facebook\.com\//i, "").replace(/^\/+/, "")}
+   668→   668→                </p>
+   669→   669→              ) : null}
+   670→   670→              {form.tiktok ? (
+   671→   671→                <p className="flex items-center gap-2 text-sm">
+   672→   672→                  <Music2 className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" /> @{form.tiktok.replace(/^@+/, "")}
+   673→   673→                </p>
+   674→   674→              ) : null}
+   675→   675→            </div>
+   676→   676→          ) : (
+   677→   677→            <p className="text-sm text-muted-foreground">Belum diisi.</p>
+   678→   678→          )}
+   679→   679→        </section>
+   680→   680→
+   681→   681→        <p className="text-[11px] text-muted-foreground text-center pt-1">Beginilah tampilan profil bisnis Anda di mata pelanggan.</p>
+   682→   682→      </CardContent>
+   683→   683→    </Card>
+   684→   684→  );
+   685→   685→}
+   686→   686→
+   687→   687→function hasCoords(lat: string, lng: string): boolean {
+   688→   688→  return Number.isFinite(parseFloat(lat)) && Number.isFinite(parseFloat(lng));
+   689→   689→}
+   690→   690→

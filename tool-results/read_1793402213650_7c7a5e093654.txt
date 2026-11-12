@@ -1,0 +1,711 @@
+     1→/* Seed data demo: IndiGoo (WA Business clone) */
+     2→import { PrismaClient } from "@prisma/client";
+     3→import { mkdir, writeFile } from "fs/promises";
+     4→import path from "path";
+     5→import { wibDateKey } from "../src/lib/wib";
+     6→
+     7→const db = new PrismaClient();
+     8→
+     9→// ---------- helpers ----------
+    10→const mins = (n: number) => new Date(Date.now() - n * 60_000);
+    11→const hrs = (n: number) => new Date(Date.now() - n * 3_600_000);
+    12→const days = (n: number) => new Date(Date.now() - n * 86_400_000);
+    13→
+    14→function tinyWav(seconds = 1.2, freq = 620): Buffer {
+    15→  const sampleRate = 8000;
+    16→  const total = Math.floor(sampleRate * seconds);
+    17→  const data = Buffer.alloc(total * 2);
+    18→  for (let i = 0; i < total; i++) {
+    19→    const t = i / sampleRate;
+    20→    const fade = Math.min(1, t * 8) * Math.min(1, (seconds - t) * 4);
+    21→    const v = Math.sin(2 * Math.PI * freq * t) * 0.25 * fade;
+    22→    data.writeInt16LE(Math.round(v * 32767), i * 2);
+    23→  }
+    24→  const header = Buffer.alloc(44);
+    25→  header.write("RIFF", 0);
+    26→  header.writeUInt32LE(36 + data.length, 4);
+    27→  header.write("WAVE", 8);
+    28→  header.write("fmt ", 12);
+    29→  header.writeUInt32LE(16, 16);
+    30→  header.writeUInt16LE(1, 20);
+    31→  header.writeUInt16LE(1, 22);
+    32→  header.writeUInt32LE(sampleRate, 24);
+    33→  header.writeUInt32LE(sampleRate * 2, 28);
+    34→  header.writeUInt16LE(2, 32);
+    35→  header.writeUInt16LE(16, 34);
+    36→  header.write("data", 36);
+    37→  header.writeUInt32LE(data.length, 40);
+    38→  return Buffer.concat([header, data]);
+    39→}
+    40→
+    41→// PDF satu halaman minimal (Batch 4: dokumen seed adalah berkas nyata di disk,
+    42→// bukan placeholder "#" maupun data URL di database)
+    43→function tinyPdf(): Buffer {
+    44→  const lines = [
+    45→    "Invoice BJ-2024-0187",
+    46→    "IndiGoo - Toko Souvenir & Pangan Olahan",
+    47→    "",
+    48→    "Batik Parang Sogan (2 m) x 2    500.000 mP",
+    49→    "Total: 500.000 mP",
+    50→    "",
+    51→    "Terima kasih atas pesanan Anda.",
+    52→  ];
+    53→  let content = "";
+    54→  let y = 790;
+    55→  for (const ln of lines) {
+    56→    content += `BT /F1 12 Tf 56 ${y} Td (${ln.replace(/[\\()]/g, " ")}) Tj ET\n`;
+    57→    y -= 24;
+    58→  }
+    59→  const objects = [
+    60→    "<< /Type /Catalog /Pages 2 0 R >>",
+    61→    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    62→    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    63→    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`,
+    64→    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    65→  ];
+    66→  let pdf = "%PDF-1.4\n";
+    67→  const offsets: number[] = [];
+    68→  objects.forEach((body, i) => {
+    69→    offsets.push(Buffer.byteLength(pdf));
+    70→    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+    71→  });
+    72→  const xrefStart = Buffer.byteLength(pdf);
+    73→  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    74→  for (const off of offsets) pdf += `${off.toString().padStart(10, "0")} 00000 n \n`;
+    75→  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    76→  return Buffer.from(pdf, "latin1");
+    77→}
+    78→
+    79→async function main() {
+    80→  // ==== PENJAGA NON-DESTRUKTIF (diperkuat Task 48) ====
+    81→  // Seed TIDAK PERNAH menimpa/menghidupkan kembali data apa pun. Reset total hanya jika
+    82→  // flag --force. Seed hanya berjalan bila database BENAR-BENAR kosong — sehingga data
+    83→  // yang dibuat/ubah/dihapus pengguna (produk, chat, kontak, channel, komunitas, dst.)
+    84→  // tidak akan pernah berubah kembali karena seed.
+    85→  const force = process.argv.includes("--force");
+    86→  if (!force) {
+    87→    const [existingProfile, contactCount, productCount, chatCount, messageCount, channelCount, communityCount] =
+    88→      await Promise.all([
+    89→        db.profile.findUnique({ where: { id: "main" } }),
+    90→        db.contact.count(),
+    91→        db.product.count(),
+    92→        db.chat.count(),
+    93→        db.message.count(),
+    94→        db.channel.count(),
+    95→        db.community.count(),
+    96→      ]);
+    97→    const hasAnyData = !!existingProfile || [contactCount, productCount, chatCount, messageCount, channelCount, communityCount].some((n) => n > 0);
+    98→    if (hasAnyData) {
+    99→      console.log("ℹ️  Seed dilewati: database sudah berisi data. Perubahan Anda AMAN (tidak ditimpa).");
+   100→      console.log("   Untuk reset total ke data demo: bun run db:seed:force");
+   101→      await db.$disconnect();
+   102→      return;
+   103→    }
+   104→  }
+   105→
+   106→  // wipe (order matters) — hanya berjalan saat database kosong ATAU --force
+   107→  await db.message.deleteMany();
+   108→  await db.chat.deleteMany();
+   109→  await db.callLog.deleteMany();
+   110→  await db.story.deleteMany();
+   111→  await db.broadcast.deleteMany();
+   112→  await db.quickReply.deleteMany();
+   113→  await db.channelPost.deleteMany();
+   114→  await db.channel.deleteMany();
+   115→  await db.community.deleteMany();
+   116→  await db.device.deleteMany();
+   117→  await db.dailyStat.deleteMany();
+   118→  await db.chatBackup.deleteMany();
+   119→  await db.product.deleteMany();
+   120→  await db.collection.deleteMany();
+   121→  await db.label.deleteMany();
+   122→  await db.contact.deleteMany();
+   123→
+   124→  // ---------- BERKAS MEDIA SEED (Batch 4) ----------
+   125→  // Media pesan seed ditulis sebagai berkas nyata di public/uploads/chat/ —
+   126→  // DB hanya menyimpan URL-nya (bukan lagi base64 / placeholder "#").
+   127→  const seedUploadDir = path.join(process.cwd(), "public", "uploads", "chat");
+   128→  await mkdir(seedUploadDir, { recursive: true });
+   129→  await writeFile(path.join(seedUploadDir, "seed-pesan-suara.wav"), tinyWav());
+   130→  await writeFile(path.join(seedUploadDir, "seed-invoice.pdf"), tinyPdf());
+   131→  const seedWavUrl = "/uploads/chat/seed-pesan-suara.wav";
+   132→  const seedInvoiceUrl = "/uploads/chat/seed-invoice.pdf";
+   133→
+   134→  // PENTING: Profile TIDAK dihapus. Identitas bisnis (nama aplikasi/bisnis, logo,
+   135→  // deskripsi, pengaturan) adalah milik user — reset demo TIDAK BOLEH menimpanya.
+   136→  // Profile demo hanya dibuat bila database benar-benar belum punya profile.
+   137→  const existingProfile = await db.profile.findUnique({ where: { id: "main" } });
+   138→  if (!existingProfile) {
+   139→    // ---------- PROFILE ----------
+   140→    await db.profile.create({
+   141→      data: {
+   142→        id: "main",
+   143→        businessName: "IndiGoo",
+   144→        ownerName: "Pak Jaya Santoso",
+   145→        category: "Toko Souvenir & Pangan Olahan",
+   146→        description:
+   147→          "Toko oleh-oleh khas Yogyakarta sejak 2015. Menyediakan kopi arabika, keripik singkong, batik tulis, songket, dan kerajinan kulit. Melayani pembelian retail & grosir (reseller).",
+   148→        address: "Jl. Malioboro No. 24, Sosromenduran, Gedong Tengen, Kota Yogyakarta, DIY 55271",
+   149→        lat: -7.7929,
+   150→        lng: 110.3657,
+   151→        phone: "+62 851-9651-3337",
+   152→        email: "halo@indigoo.id",
+   153→        website: "https://indigoo.id",
+   154→        instagram: "indigoo",
+   155→        facebook: "IndiGoo",
+   156→        tiktok: "indigoo",
+   157→        hours: JSON.stringify([
+   158→          { day: "Senin", open: "08:00", close: "17:00", closed: false },
+   159→          { day: "Selasa", open: "08:00", close: "17:00", closed: false },
+   160→          { day: "Rabu", open: "08:00", close: "17:00", closed: false },
+   161→          { day: "Kamis", open: "08:00", close: "17:00", closed: false },
+   162→          { day: "Jumat", open: "08:00", close: "16:30", closed: false },
+   163→          { day: "Sabtu", open: "08:00", close: "18:00", closed: false },
+   164→          { day: "Minggu", open: "", close: "", closed: true },
+   165→        ]),
+   166→        logoUrl: "/images/logo.png",
+   167→        greetingText:
+   168→          "Halo! Terima kasih sudah menghubungi IndiGoo 🙏 Ada yang bisa kami bantu? Ketik *katalog* untuk melihat produk kami.",
+   169→        awayText:
+   170→          "Terima kasih atas pesan Anda. Saat ini kami sedang di luar jam operasional (08.00–17.00 WIB). Pesan Anda akan segera kami balas begitu toko buka kembali. 🙏",
+   171→      },
+   172→    });
+   173→    console.log("✅ Profile demo dibuat (database belum punya profile).");
+   174→  } else {
+   175→    console.log(`🛡️  Profile bisnis DIPERTAHANKAN: "${existingProfile.businessName}" — perubahan Anda aman.`);
+   176→  }
+   177→
+   178→  // ---------- LABELS ----------
+   179→  const labelData = [
+   180→    { name: "Pelanggan Baru", colorKey: "emerald", sortOrder: 1 },
+   181→    { name: "Prospek", colorKey: "amber", sortOrder: 2 },
+   182→    { name: "Menunggu Pembayaran", colorKey: "orange", sortOrder: 3 },
+   183→    { name: "Sudah Bayar", colorKey: "teal", sortOrder: 4 },
+   184→    { name: "Pesanan Diproses", colorKey: "purple", sortOrder: 5 },
+   185→    { name: "Pesanan Selesai", colorKey: "green", sortOrder: 6 },
+   186→    { name: "VIP", colorKey: "pink", sortOrder: 7 },
+   187→    { name: "Reseller", colorKey: "red", sortOrder: 8 },
+   188→  ];
+   189→  const labels: Record<string, { id: string }> = {};
+   190→  for (const l of labelData) {
+   191→    labels[l.name] = await db.label.create({ data: l });
+   192→  }
+   193→
+   194→  // ---------- CONTACTS ----------
+   195→  const c = async (
+   196→    name: string,
+   197→    phone: string,
+   198→    colorKey: string,
+   199→    about: string,
+   200→    labelNames: string[],
+   201→    lastSeenMin: number | null
+   202→  ) => {
+   203→    const found = await db.contact.create({
+   204→      data: {
+   205→        name,
+   206→        phone,
+   207→        colorKey,
+   208→        about,
+   209→        lastSeen: lastSeenMin === null ? null : mins(lastSeenMin),
+   210→        labelIds: JSON.stringify(labelNames.map((n) => labels[n].id)),
+   211→      },
+   212→    });
+   213→    return found;
+   214→  };
+   215→
+   216→  const budi = await c("Budi Santoso", "+62 813-1111-2222", "emerald", "Halo, saya Budi 👋", ["Pelanggan Baru", "Prospek"], 12);
+   217→  const siti = await c("Siti Rahayu", "+62 812-2222-3333", "purple", "Sibuk dulu ya", ["VIP", "Sudah Bayar"], 45);
+   218→  const andi = await c("Andi Wijaya", "+62 813-3333-4444", "amber", "Available", ["Prospek"], 180);
+   219→  const dewi = await c("Dewi Lestari", "+62 812-4444-5555", "pink", "Bertedua di cahaya-Nya", ["Pesanan Diproses", "Menunggu Pembayaran"], 30);
+   220→  const rudi = await c("Rudi Hartono", "+62 813-5555-6666", "teal", "Di kantor", ["Pelanggan Baru"], 2880);
+   221→  const maya = await c("Maya Putri", "+62 812-6666-7777", "rose", "Reseller resmi BJ ✅", ["VIP", "Reseller"], 100);
+   222→  const agus = await c("Agus Salim", "+62 813-7777-8888", "orange", "Santai dulu", ["Pesanan Selesai"], 4320);
+   223→  const fitri = await c("Fitri Handayani", "+62 812-8888-9999", "violet", "Owner Toko Fitri", ["Reseller", "Sudah Bayar"], 90);
+   224→  const maju = await c("Toko Maju Jaya", "+62 813-9999-0000", "cyan", "Toko grosir jakarta", ["Reseller", "VIP"], 200);
+   225→  const kiosk = await c("Ibu Kiosk", "+62 812-0000-1111", "lime", "Bu Kios Malioboro", ["Prospek"], 10080);
+   226→
+   227→  const allContacts = [budi, siti, andi, dewi, rudi, maya, agus, fitri, maju, kiosk];
+   228→
+   229→  // ---------- CHATS & MESSAGES ----------
+   230→  type Msg = Partial<{
+   231→    sender: string;
+   232→    type: string;
+   233→    body: string;
+   234→    mediaUrl: string;
+   235→    mediaName: string;
+   236→    mediaMime: string;
+   237→    mediaSize: number;
+   238→    latitude: number;
+   239→    longitude: number;
+   240→    placeName: string;
+   241→    cardName: string;
+   242→    cardPhone: string;
+   243→    productId: string;
+   244→    status: string;
+   245→    at: Date;
+   246→  }>;
+   247→
+   248→  const mkChat = async (
+   249→    data: { type?: string; name?: string; contactId?: string; members?: string; groupDesc?: string; pinned?: boolean; archived?: boolean; muted?: boolean; unread?: number; isBusinessChat?: boolean; colorKey?: string; avatarUrl?: string },
+   250→    msgs: Msg[]
+   251→  ) => {
+   252→    const last = msgs.length ? msgs[msgs.length - 1].at ?? hrs(1) : hrs(1);
+   253→    const chat = await db.chat.create({
+   254→      data: {
+   255→        type: "PRIVATE",
+   256→        ...data,
+   257→        lastMessageAt: last,
+   258→      },
+   259→    });
+   260→    for (const m of msgs) {
+   261→      await db.message.create({
+   262→        data: {
+   263→          chatId: chat.id,
+   264→          sender: m.sender ?? "me",
+   265→          type: m.type ?? "TEXT",
+   266→          body: m.body ?? "",
+   267→          mediaUrl: m.mediaUrl,
+   268→          mediaName: m.mediaName,
+   269→          mediaMime: m.mediaMime,
+   270→          mediaSize: m.mediaSize,
+   271→          latitude: m.latitude,
+   272→          longitude: m.longitude,
+   273→          placeName: m.placeName,
+   274→          cardName: m.cardName,
+   275→          cardPhone: m.cardPhone,
+   276→          productId: m.productId,
+   277→          status: m.sender === "me" || m.sender === "system" ? m.status ?? "READ" : "READ",
+   278→          createdAt: m.at ?? hrs(1),
+   279→        },
+   280→      });
+   281→    }
+   282→    return chat;
+   283→  };
+   284→
+   285→  // Budi Santoso — tanya produk kopi (unread 2)
+   286→  const chatBudi = await mkChat(
+   287→    { contactId: budi.id, unread: 2, isBusinessChat: true },
+   288→    [
+   289→      { sender: budi.id, body: "Halo kak, mau tanya kopi arabika gayo tersedia?", at: hrs(5) },
+   290→      { sender: "system", type: "SYSTEM", body: "Pesan otomatis: Halo! Terima kasih sudah menghubungi IndiGoo 🙏", at: hrs(5) },
+   291→      { sender: "me", body: "Halo Pak Budi 😊 Tersedia kak! Roast bean maupun grinding ada.", status: "READ", at: hrs(4.9) },
+   292→      { sender: "me", type: "PRODUCT", productId: "prod-kopi", body: "Kopi Arabika Gayo 250g", status: "READ", at: hrs(4.8) },
+   293→      { sender: budi.id, body: "Ini tadi beli 2 di toko, enak banget kopi nya 👍", at: hrs(3.2) },
+   294→      { sender: budi.id, type: "IMAGE", mediaUrl: "/images/product-kopi.png", body: "Ini yang kemarin ya kak", at: mins(28) },
+   295→      { sender: budi.id, body: "Besok bisa antar ke Kaliurang gak? 😄", at: mins(15) },
+   296→    ]
+   297→  );
+   298→
+   299→  // Siti Rahayu — VIP, order batik (pinned)
+   300→  const chatSiti = await mkChat(
+   301→    { contactId: siti.id, pinned: true, isBusinessChat: true },
+   302→    [
+   303→      { sender: siti.id, body: "Kak, batik parang 2 meter warna sogan ada stok?", at: days(1.2) },
+   304→      { sender: "me", body: "Ada kak, hari ini baru masuk 5 lembar ✅", status: "READ", at: days(1.1) },
+   305→      { sender: "me", type: "IMAGE", mediaUrl: "/images/product-batik.png", body: "Ini kak motifnya", status: "READ", at: days(1.09) },
+   306→      { sender: siti.id, body: "Oke, ambil 2 ya. Transfer kemarin sudah dikirim", at: days(1) },
+   307→      { sender: "me", type: "DOC", mediaUrl: seedInvoiceUrl, mediaName: "Invoice_BJ-2024-0187.pdf", mediaMime: "application/pdf", mediaSize: 184320, body: "Terima kasih 🙏 Berikut invoice-nya", status: "READ", at: days(0.9) },
+   308→      { sender: "me", type: "LOCATION", latitude: -7.7929, longitude: 110.3657, placeName: "IndiGoo, Malioboro", body: "Ini lokasi toko kami kak, bisa ambil langsung", status: "READ", at: days(0.8) },
+   309→      { sender: siti.id, type: "AUDIO", mediaUrl: seedWavUrl, body: "Pesan suara (1:12)", mediaSize: 56000, at: hrs(20) },
+   310→      { sender: siti.id, body: "Sudah sampai, batiknya bagus banget! Terima kasih ya 😍", at: hrs(2) },
+   311→    ]
+   312→  );
+   313→
+   314→  // Dewi Lestari — nunggu pembayaran
+   315→  const chatDewi = await mkChat(
+   316→    { contactId: dewi.id, unread: 1, isBusinessChat: true },
+   317→    [
+   318→      { sender: dewi.id, body: "Kak, madu hutan 500ml ready?", at: hrs(7) },
+   319→      { sender: "me", body: "Ready kak 😊 120 ribu, free bubble wrap + bubble wrap anti pecah", status: "DELIVERED", at: hrs(6.9) },
+   320→      { sender: "me", body: "Bisa juga COD area Jogja kak", status: "READ", at: hrs(6.8) },
+   321→      { sender: dewi.id, body: "Oke siap, saya transfer besok pagi ya", at: hrs(2.5) },
+   322→    ]
+   323→  );
+   324→
+   325→  // Maya Putri — reseller
+   326→  const chatMaya = await mkChat(
+   327→    { contactId: maya.id, isBusinessChat: true },
+   328→    [
+   329→      { sender: maya.id, body: "Kak, keripik balado bisa 50 pcs harga reseller?", at: days(2) },
+   330→      { sender: "me", body: "Bisa kak, 20.000/pcs, free ongkir ke Semarang min. 50 pcs ✅", status: "READ", at: days(1.9) },
+   331→      { sender: maya.id, body: "Siap, saya kirim alamat ya", at: days(1.8) },
+   332→      { sender: "me", type: "CONTACT_CARD", cardName: "Kurir IndiGoo (Anton)", cardPhone: "+62 811-2345-6789", body: "Nanti dijemput kurir kami", status: "READ", at: days(1.7) },
+   333→      { sender: maya.id, body: "Sudah dikirim uangnya kak, cek ya 🙏", at: hrs(10) },
+   334→      { sender: "me", body: "Sudah masuk kak, terima kasih! Pesanan diproses hari ini 🚚", status: "READ", at: hrs(9.5) },
+   335→    ]
+   336→  );
+   337→
+   338→  // Andi Wijaya — prospek pendek
+   339→  const chatAndi = await mkChat(
+   340→    { contactId: andi.id },
+   341→    [
+   342→      { sender: andi.id, body: "Permisi, untuk songket tenun bisa lihat katalog?", at: days(3) },
+   343→      { sender: "me", body: "Tentu kak, ini katalog lengkap kami:", status: "READ", at: days(3) },
+   344→      { sender: "me", type: "IMAGE", mediaUrl: "/images/product-songket.png", body: "Songket Tenun Premium — Rp 450.000", status: "READ", at: days(2.9) },
+   345→    ]
+   346→  );
+   347→
+   348→  // Rudi Hartono — archived
+   349→  const chatRudi = await mkChat(
+   350→    { contactId: rudi.id, archived: true },
+   351→    [
+   352→      { sender: rudi.id, body: "Kak, tas kulitnya ready stock warna hitam?", at: days(6) },
+   353→      { sender: "me", body: "Ready kak, besok bisa kami kirim ✅", status: "READ", at: days(6) },
+   354→      { sender: rudi.id, body: "Sudah diterima, makasih!", at: days(5) },
+   355→    ]
+   356→  );
+   357→
+   358→  // Agus Salim — lama
+   359→  const chatAgus = await mkChat(
+   360→    { contactId: agus.id },
+   361→    [
+   362→      { sender: agus.id, body: "Terima kasih kak, pesanan #BJ-2024-0142 sudah sampai dan aman 🙏", at: days(8) },
+   363→      { sender: "me", body: "Sama-sama kak! Jangan lupa review ya 😊", status: "READ", at: days(8) },
+   364→    ]
+   365→  );
+   366→
+   367→  // Group Reseller
+   368→  const chatGroup = await mkChat(
+   369→    {
+   370→      type: "GROUP",
+   371→      name: "Reseller IndiGoo 🛍️",
+   372→      colorKey: "teal",
+   373→      groupDesc: "Grup reseller resmi IndiGoo. Info stok, harga grosir & pengiriman.",
+   374→      members: JSON.stringify([
+   375→        { contactId: maya.id, role: "admin" },
+   376→        { contactId: fitri.id, role: "admin" },
+   377→        { contactId: maju.id, role: "member" },
+   378→      ]),
+   379→      unread: 3,
+   380→    },
+   381→    [
+   382→      { sender: "system", type: "SYSTEM", body: "Maya Putri menambahkan Toko Maju Jaya", at: days(4) },
+   383→      { sender: fitri.id, body: "Pagil! Stok batik sogan masih ada gak kak?", at: hrs(26) },
+   384→      { sender: "me", body: "Ada kak Fitri, sisa 12 lembar. Prioritas reseller dulu 😊", status: "READ", at: hrs(25) },
+   385→      { sender: maju.id, body: "Untuk grosir ke Jakarta bisa rekap mingguan?", at: hrs(9) },
+   386→      { sender: "me", body: "Bisa banget kak. Nanti saya buatkan price list rekapnya 📋", status: "READ", at: hrs(8.5) },
+   387→      { sender: maya.id, body: "Noted kak 🙌", at: hrs(8) },
+   388→      { sender: fitri.id, body: "Mantap, thanks kak 👍", at: hrs(1.5) },
+   389→    ]
+   390→  );
+   391→
+   392→  // ---------- CALLS ----------
+   393→  await db.callLog.createMany({
+   394→    data: [
+   395→      { contactId: siti.id, contactName: siti.name, colorKey: siti.colorKey, kind: "VIDEO", direction: "IN", durationSec: 0, createdAt: hrs(3) },
+   396→      { contactId: budi.id, contactName: budi.name, colorKey: budi.colorKey, kind: "VOICE", direction: "OUT", durationSec: 125, createdAt: hrs(14) },
+   397→      { contactId: dewi.id, contactName: dewi.name, colorKey: dewi.colorKey, kind: "VOICE", direction: "IN", durationSec: 45, createdAt: days(1) },
+   398→      { contactId: maya.id, contactName: maya.name, colorKey: maya.colorKey, kind: "VIDEO", direction: "OUT", durationSec: 300, createdAt: days(1.5) },
+   399→      { contactId: fitri.id, contactName: fitri.name, colorKey: fitri.colorKey, kind: "VOICE", direction: "MISSED", durationSec: 0, createdAt: days(2) },
+   400→      { contactId: agus.id, contactName: agus.name, colorKey: agus.colorKey, kind: "VOICE", direction: "OUT", durationSec: 62, createdAt: days(3) },
+   401→    ],
+   402→  });
+   403→
+   404→  // ---------- KATALOG ----------
+   405→  const makanan = await db.collection.create({ data: { name: "Makanan & Minuman" } });
+   406→  const kerajinan = await db.collection.create({ data: { name: "Kerajinan" } });
+   407→  const fashion = await db.collection.create({ data: { name: "Fashion" } });
+   408→
+   409→  await db.product.createMany({
+   410→    data: [
+   411→      {
+   412→        id: "prod-kopi",
+   413→        name: "Kopi Arabika Gayo 250g",
+   414→        price: 85000,
+   415→        description: "Kopi arabika single origin dari dataran tinggi Gayo, Aceh. Roast medium, notes cokelat & karamel. Tersedia whole bean / grind.",
+   416→        sku: "BJ-KOPI-001",
+   417→        imageUrl: "/images/product-kopi.png",
+   418→        link: "https://indigoo.id/kopi-arabika-gayo",
+   419→        stock: 42,
+   420→        collectionId: makanan.id,
+   421→      },
+   422→      {
+   423→        name: "Keripik Singkong Balado 500g",
+   424→        price: 25000,
+   425→        description: "Keripik singkong renyah dengan bumbu balado khas Jogja. Tanpa MSG, tahan 3 bulan.",
+   426→        sku: "BJ-KRPIK-002",
+   427→        imageUrl: "/images/product-keripik.png",
+   428→        link: "https://indigoo.id/keripik-balado",
+   429→        stock: 120,
+   430→        collectionId: makanan.id,
+   431→      },
+   432→      {
+   433→        name: "Madu Hutan Murni 500ml",
+   434→        price: 120000,
+   435→        description: "Madu hutan asli Sumbawa, dipanen petani lokal. Tanpa gula tambahan, sudah uji lab.",
+   436→        sku: "BJ-MADU-003",
+   437→        imageUrl: "/images/product-madu.png",
+   438→        link: "https://indigoo.id/madu-hutan",
+   439→        stock: 35,
+   440→        collectionId: makanan.id,
+   441→      },
+   442→      {
+   443→        name: "Batik Tulis Parang Sogan 2m",
+   444→        price: 275000,
+   445→        description: "Batik tulis asli Pekalongan, motif parang sogan, pewarna alami indigofera. Cocok untuk baju & sarung.",
+   446→        sku: "BJ-BTK-004",
+   447→        imageUrl: "/images/product-batik.png",
+   448→        link: "https://indigoo.id/batik-parang",
+   449→        stock: 12,
+   450→        collectionId: kerajinan.id,
+   451→      },
+   452→      {
+   453→        name: "Songket Tenun Premium",
+   454→        price: 450000,
+   455→        description: "Songket tenun tangan dengan benang emas asli. Pilihan tepat untuk acara adat & hantaran.",
+   456→        sku: "BJ-SNGKT-005",
+   457→        imageUrl: "/images/product-songket.png",
+   458→        link: "https://indigoo.id/songket-premium",
+   459→        stock: 8,
+   460→        collectionId: kerajinan.id,
+   461→      },
+   462→      {
+   463→        name: "Tas Kulit Jepit Handmade",
+   464→        price: 165000,
+   465→        description: "Tas kulit sapi asli buatan tangan pengrajin Kotagede. Tersedia warna cokelat, hitam, mustard.",
+   466→        sku: "BJ-TAS-006",
+   467→        imageUrl: "/images/product-tas.png",
+   468→        link: "https://indigoo.id/tas-kulit",
+   469→        stock: 20,
+   470→        collectionId: fashion.id,
+   471→      },
+   472→    ],
+   473→  });
+   474→
+   475→  // ---------- STATUS / STORIES ----------
+   476→  await db.story.createMany({
+   477→    data: [
+   478→      {
+   479→        sender: "me",
+   480→        mediaType: "TEXT",
+   481→        body: "Promo Gajian! Diskon 20% semua produk s/d akhir pekan 🎉🎉",
+   482→        bgColor: "emerald",
+   483→        views: 34,
+   484→        createdAt: hrs(4),
+   485→        expiresAt: hrs(20),
+   486→      },
+   487→      {
+   488→        sender: "me",
+   489→        mediaType: "IMAGE",
+   490→        body: "Menu baru: Kopi Gayo biji segar roasting hari ini 🔥",
+   491→        mediaUrl: "/images/product-kopi.png",
+   492→        views: 51,
+   493→        createdAt: hrs(10),
+   494→        expiresAt: hrs(14),
+   495→      },
+   496→      {
+   497→        sender: "me",
+   498→        mediaType: "IMAGE",
+   499→        body: "Testimoni ibu Siti — terima kasih sudah order lagi 😍",
+   500→        mediaUrl: "/images/product-batik.png",
+   501→        views: 19,
+   502→        createdAt: hrs(28),
+   503→        expiresAt: hrs(-4), // sudah lewat 4 jam lagi? no: 20 jam lagi
+   504→      },
+   505→      {
+   506→        sender: siti.id,
+   507→        mediaType: "IMAGE",
+   508→        body: "Batiknya sampai! Mantap 🔥",
+   509→        mediaUrl: "/images/product-batik.png",
+   510→        views: 8,
+   511→        createdAt: hrs(6),
+   512→        expiresAt: hrs(18),
+   513→      },
+   514→      {
+   515→        sender: maya.id,
+   516→        mediaType: "IMAGE",
+   517→        body: "Restock keripik dulu 🙌",
+   518→        mediaUrl: "/images/product-keripik.png",
+   519→        views: 5,
+   520→        createdAt: hrs(12),
+   521→        expiresAt: hrs(12),
+   522→      },
+   523→      {
+   524→        sender: budi.id,
+   525→        mediaType: "TEXT",
+   526→        body: "Buka puasa bareng kopinya IndiGoo ☕",
+   527→        bgColor: "amber",
+   528→        views: 3,
+   529→        createdAt: hrs(8),
+   530→        expiresAt: hrs(16),
+   531→      },
+   532→    ],
+   533→  });
+   534→
+   535→  // ---------- BROADCASTS ----------
+   536→  await db.broadcast.createMany({
+   537→    data: [
+   538→      {
+   539→        name: "Promo Gajian Akhir Bulan",
+   540→        message: "🎉 *PROMO GAJIAN!* Diskon 20% untuk semua produk di IndiGoo. Berlaku sampai akhir pekan. Kunjungi katalog: indigoo.id/katalog",
+   541→        audienceType: "ALL",
+   542→        recipientCount: 10,
+   543→        sentCount: 10,
+   544→        deliveredCount: 9,
+   545→        readCount: 7,
+   546→        failedCount: 1,
+   547→        status: "SENT",
+   548→        createdAt: days(2),
+   549→        sentAt: days(2),
+   550→      },
+   551→      {
+   552→        name: "Rilis Produk: Songket Premium",
+   553→        message: "✨ Produk baru! Songket tenun premium dengan benang emas asli. Harga spesial untuk reseller. Cek katalog sekarang!",
+   554→        audienceType: "LABEL",
+   555→        audienceLabel: labels["Reseller"].id,
+   556→        recipientCount: 3,
+   557→        sentCount: 3,
+   558→        deliveredCount: 3,
+   559→        readCount: 3,
+   560→        failedCount: 0,
+   561→        status: "SENT",
+   562→        createdAt: days(5),
+   563→        sentAt: days(5),
+   564→      },
+   565→      {
+   566→        name: "Diskon Hari Kemerdekaan",
+   567→        message: "🇮🇩 DIRGAHAYU! Diskon 17% semua kerajinan batik & songket. Gunakan kode MERDEKA17.",
+   568→        audienceType: "ALL",
+   569→        status: "DRAFT",
+   570→        createdAt: hrs(30),
+   571→      },
+   572→    ],
+   573→  });
+   574→
+   575→  // ---------- QUICK REPLIES ----------
+   576→  await db.quickReply.createMany({
+   577→    data: [
+   578→      { shortcut: "/harga", message: "Berikut daftar harga terbaru kami kak: Kopi Gayo 250g Rp 85.000, Keripik Balado Rp 25.000, Madu Hutan Rp 120.000, Batik Tulis Rp 275.000, Songket Rp 450.000, Tas Kulit Rp 165.000. 😊", sortOrder: 1 },
+   579→      { shortcut: "/ongkir", message: "Ongkir dihitung sesuai berat & lokasi ya kak. Area Jogja free ongkir min. belanja Rp 100.000 🚚 Luar kota via JNE/J&T/SiCepat.", sortOrder: 2 },
+   580→      { shortcut: "/bayar", message: "Pembayaran bisa via Transfer (BCA 1234567890 a.n. IndiGoo), QRIS, atau COD area Jogja 🙏", sortOrder: 3 },
+   581→      { shortcut: "/katalog", message: "Katalog lengkap bisa dilihat di: https://indigoo.id/katalog atau ketik nama produk yang kakak cari 😊", sortOrder: 4 },
+   582→      { shortcut: "/thanks", message: "Terima kasih sudah berbelanja di IndiGoo 🙏🙏 Jangan lupa follow IG @indigoo untuk promo terbaru!", sortOrder: 5 },
+   583→    ],
+   584→  });
+   585→
+   586→  // ---------- CHANNELS ----------
+   587→  const chMine = await db.channel.create({
+   588→    data: {
+   589→      name: "IndiGoo Official",
+   590→      handle: "indigoo",
+   591→      description: "Channel resmi IndiGoo. Info produk, promo & tips UMKM.",
+   592→      colorKey: "emerald",
+   593→      followers: 1240,
+   594→      isMine: true,
+   595→      verified: false,
+   596→    },
+   597→  });
+   598→  const chUmkm = await db.channel.create({
+   599→    data: {
+   600→      name: "UMKM Indonesia",
+   601→      handle: "umkmindonesia",
+   602→      description: "Channel terbesar untuk pelaku UMKM se-Indonesia. Tips, pelatihan & info subsidi.",
+   603→      colorKey: "amber",
+   604→      followers: 152000,
+   605→      following: true,
+   606→      verified: true,
+   607→    },
+   608→  });
+   609→  const chKuliner = await db.channel.create({
+   610→    data: {
+   611→      name: "Kuliner Nusantara",
+   612→      handle: "kulinernusantara",
+   613→      description: "Update kuliner legendaris dari Sabang sampai Merauke 🍜",
+   614→      colorKey: "orange",
+   615→      followers: 89300,
+   616→      following: true,
+   617→    },
+   618→  });
+   619→  const chTips = await db.channel.create({
+   620→    data: {
+   621→      name: "Tips Jualan Online",
+   622→      handle: "tipsjualan",
+   623→      description: "Tips marketing, foto produk & closing jualan tiap hari 📈",
+   624→      colorKey: "purple",
+   625→      followers: 45200,
+   626→      following: false,
+   627→    },
+   628→  });
+   629→
+   630→  await db.channelPost.createMany({
+   631→    data: [
+   632→      { channelId: chMine.id, body: "🚨 RESTOCK! Kopi Arabika Gayo 250g sudah tersedia kembali. Buruan order sebelum kehabisan!", likes: 42, views: 512, createdAt: hrs(6) },
+   633→      { channelId: chMine.id, body: "Tips hari ini: Balas chat pelanggan maksimal 5 menit, konversi naik sampai 3x lipat! ⏱️", likes: 88, views: 923, createdAt: days(1) },
+   634→      { channelId: chMine.id, body: "Terima kasih 1.200 followers! 🎉 Berikut video behind the scene roasting kopi kami.", imageUrl: "/images/product-kopi.png", likes: 120, views: 1100, createdAt: days(2) },
+   635→      { channelId: chUmkm.id, body: "📋 Pendaftaran pelatihan digital marketing gratis untuk 500 UMKM dibuka! Link pendaftaran di bio.", likes: 990, views: 12400, createdAt: hrs(20) },
+   636→      { channelId: chUmkm.id, body: "Penting! Mulai bulan depan, laporan pajak UMKM bisa via aplikasi. Simak panduannya pada unggahan berikutnya.", likes: 650, views: 8100, createdAt: days(2) },
+   637→      { channelId: chKuliner.id, body: "🍜 5 warung bakmi legendaris Jogja yang buka 24 jam. Simak daftarnya!", likes: 430, views: 5600, createdAt: hrs(30) },
+   638→      { channelId: chKuliner.id, body: "Polling: Gudeg Yu Djum vs Gudeg Pawon? Komen pilihanmu! 👇", likes: 210, views: 3200, createdAt: days(1.5) },
+   639→      { channelId: chTips.id, body: "Fotoproduk pakai cahaya jendela pagi (07-09) hasilnya 2x lebih bagus daripada lampu kuning 💡📸", likes: 320, views: 4100, createdAt: days(3) },
+   640→    ],
+   641→  });
+   642→
+   643→  // ---------- COMMUNITY ----------
+   644→  await db.community.create({
+   645→    data: {
+   646→      name: "Komunitas UMKM Jogja",
+   647→      description: "Wadah pelaku usaha mikro & kecil di DIY. Berbagi info stok, kurir, dan event bazar.",
+   648→      colorKey: "teal",
+   649→      memberCount: 256,
+   650→      announcement: "Bazar UMKM Ramadhan akan dihelat di Taman Pintar, 15-20 bulan depan. Pendaftaran lapak via pengurus.",
+   651→      groups: JSON.stringify([
+   652→        { id: "g1", name: "Pengumuman", members: 256, description: "Info penting dari pengurus" },
+   653→        { id: "g2", name: "Diskusi Produk", members: 190, description: "Showcase & diskusi produk anggota" },
+   654→        { id: "g3", name: "Kurir & Ongkir", members: 175, description: "Info tarif & rekomendasi kurir" },
+   655→        { id: "g4", name: "Bazar & Event", members: 210, description: "Koordinasi event bazar" },
+   656→      ]),
+   657→    },
+   658→  });
+   659→
+   660→  // ---------- DEVICES ----------
+   661→  await db.device.createMany({
+   662→    data: [
+   663→      { name: "iPhone 13 (Perangkat utama)", platform: "PHONE", current: true, lastActive: mins(1), location: "Yogyakarta, Indonesia" },
+   664→      { name: "Chrome di Windows", platform: "WEB", lastActive: hrs(2), location: "Yogyakarta, Indonesia" },
+   665→      { name: "MacBook Pro — WhatsApp Desktop", platform: "DESKTOP", lastActive: days(1), location: "Yogyakarta, Indonesia" },
+   666→      { name: "iPad Air (Safari)", platform: "TABLET", lastActive: days(4), location: "Semarang, Indonesia" },
+   667→    ],
+   668→  });
+   669→
+   670→  // ---------- STATS ----------
+   671→  const statRows: { date: string; sent: number; delivered: number; read: number; received: number; failed: number }[] = [];
+   672→  for (let i = 13; i >= 0; i--) {
+   673→    const d = days(i);
+   674→    const sent = 60 + Math.round(Math.sin(i * 1.7) * 25 + Math.random() * 40);
+   675→    const delivered = Math.round(sent * (0.88 + Math.random() * 0.1));
+   676→    const read = Math.round(delivered * (0.7 + Math.random() * 0.25));
+   677→    const received = Math.round(sent * (0.5 + Math.random() * 0.4));
+   678→    const failed = sent - delivered;
+   679→    statRows.push({
+   680→      // Batch 4: kunci tanggal harian pakai kalender WIB — konsisten dengan
+   681→      // bumpDailyStat() di runtime (lihat src/lib/daily-stat.ts)
+   682→      date: wibDateKey(d),
+   683→      sent,
+   684→      delivered,
+   685→      read,
+   686→      received,
+   687→      failed,
+   688→    });
+   689→  }
+   690→  await db.dailyStat.createMany({ data: statRows });
+   691→
+   692→  // ---------- BACKUPS ----------
+   693→  await db.chatBackup.createMany({
+   694→    data: [
+   695→      { sizeKb: 18432, messageCount: 8642, auto: true, createdAt: days(1) },
+   696→      { sizeKb: 16890, messageCount: 7911, auto: true, createdAt: days(2) },
+   697→      { sizeKb: 15234, messageCount: 7102, auto: false, createdAt: days(5) },
+   698→    ],
+   699→  });
+   700→
+   701→  console.log("✅ Seed selesai: profile, 8 label, 10 kontak, 8 chat, produk, story, siaran, channel, komunitas, perangkat, statistik, backup");
+   702→  console.log(`   chat ids: budi=${chatBudi.id} siti=${chatSiti.id} group=${chatGroup.id}`);
+   703→}
+   704→
+   705→main()
+   706→  .catch((e) => {
+   707→    console.error(e);
+   708→    process.exit(1);
+   709→  })
+   710→  .finally(() => db.$disconnect());
+   711→

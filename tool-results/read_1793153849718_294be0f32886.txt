@@ -1,0 +1,719 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useRef, useState } from "react";
+     4→import {
+     5→  Heart,
+     6→  Share2,
+     7→  Play,
+     8→  Volume2,
+     9→  VolumeX,
+    10→  Send,
+    11→  Loader2,
+    12→  Film,
+    13→  MapPin,
+    14→  Users,
+    15→  UserCheck,
+    16→  Pencil,
+    17→  Trash2,
+    18→} from "lucide-react";
+    19→import { cn } from "@/lib/wa-utils";
+    20→import { useToast } from "@/hooks/use-toast";
+    21→import { useAuth } from "@/hooks/use-auth";
+    22→import { canManageVideo } from "@/lib/user";
+    23→import { Button } from "@/components/ui/button";
+    24→import { Input } from "@/components/ui/input";
+    25→import { Label } from "@/components/ui/label";
+    26→import { Textarea } from "@/components/ui/textarea";
+    27→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+    28→import { ConfirmDialog } from "@/components/chat/ChatMenus";
+    29→import type { ViewId } from "@/components/AppShell";
+    30→
+    31→type VideoPost = {
+    32→  id: string;
+    33→  title: string;
+    34→  category: string;
+    35→  authorName: string;
+    36→  authorType: string;
+    37→  authorUserId?: string | null;
+    38→  videoUrl: string;
+    39→  posterUrl: string;
+    40→  likes: number;
+    41→  views: number;
+    42→  isFollower: boolean;
+    43→  isFollowing: boolean;
+    44→  createdAt: string;
+    45→};
+    46→
+    47→type TabId = "umum" | "hiburan" | "domisili" | "promo" | "pengikut" | "diikuti";
+    48→
+    49→const TABS: { id: TabId; label: string }[] = [
+    50→  { id: "umum", label: "Umum" },
+    51→  { id: "hiburan", label: "Hiburan" },
+    52→  { id: "domisili", label: "Domisili" },
+    53→  { id: "promo", label: "Promo" },
+    54→  { id: "pengikut", label: "Pengikut" },
+    55→  { id: "diikuti", label: "Diikuti" },
+    56→];
+    57→
+    58→const CATEGORY_LABEL: Record<string, string> = {
+    59→  hiburan: "Hiburan",
+    60→  domisili: "Domisili",
+    61→  promo: "Promo",
+    62→};
+    63→
+    64→const LIKES_KEY = "wa_video_likes";
+    65→
+    66→function readLikes(): Set<string> {
+    67→  try {
+    68→    const raw = window.localStorage.getItem(LIKES_KEY);
+    69→    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    70→  } catch {
+    71→    return new Set<string>();
+    72→  }
+    73→}
+    74→
+    75→function timeAgo(iso: string): string {
+    76→  const diff = Date.now() - new Date(iso).getTime();
+    77→  const m = Math.floor(diff / 60000);
+    78→  if (m < 1) return "baru saja";
+    79→  if (m < 60) return `${m} mnt lalu`;
+    80→  const h = Math.floor(m / 60);
+    81→  if (h < 24) return `${h} jam lalu`;
+    82→  const d = Math.floor(h / 24);
+    83→  if (d < 7) return `${d} hari lalu`;
+    84→  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+    85→}
+    86→
+    87→export default function BerandaView({ onNavigate }: { onNavigate?: (view: ViewId) => void }) {
+    88→  const { toast } = useToast();
+    89→  const { user } = useAuth();
+    90→  const [tab, setTab] = useState<TabId>("umum");
+    91→  const [videos, setVideos] = useState<VideoPost[]>([]);
+    92→  const [loading, setLoading] = useState(true);
+    93→  const [muted, setMuted] = useState(true);
+    94→  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+    95→  const [uploadOpen, setUploadOpen] = useState(false);
+    96→  const [editTarget, setEditTarget] = useState<VideoPost | null>(null);
+    97→  const [deleteTarget, setDeleteTarget] = useState<VideoPost | null>(null);
+    98→  const feedRef = useRef<HTMLDivElement>(null);
+    99→
+   100→  useEffect(() => {
+   101→    setLikedIds(readLikes());
+   102→  }, []);
+   103→
+   104→  const load = useCallback(async (t: TabId) => {
+   105→    setLoading(true);
+   106→    try {
+   107→      const res = await fetch(`/api/videos?tab=${t}`, { cache: "no-store" });
+   108→      const data = (await res.json()) as { videos?: VideoPost[] };
+   109→      setVideos(data.videos ?? []);
+   110→    } catch {
+   111→      toast({ title: "Gagal memuat video", variant: "destructive" });
+   112→    } finally {
+   113→      setLoading(false);
+   114→    }
+   115→  }, [toast]);
+   116→
+   117→  useEffect(() => {
+   118→    void load(tab);
+   119→  }, [tab, load]);
+   120→
+   121→  // ---------- Autoplay video yang terlihat ----------
+   122→  useEffect(() => {
+   123→    const root = feedRef.current;
+   124→    if (!root) return;
+   125→    const observer = new IntersectionObserver(
+   126→      (entries) => {
+   127→        entries.forEach((entry) => {
+   128→          const vid = entry.target.querySelector("video");
+   129→          if (!vid) return;
+   130→          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+   131→            vid.play().catch(() => {});
+   132→          } else {
+   133→            vid.pause();
+   134→          }
+   135→        });
+   136→      },
+   137→      { root, threshold: [0, 0.6] }
+   138→    );
+   139→    const items = root.querySelectorAll("[data-feed-item]");
+   140→    items.forEach((el) => observer.observe(el));
+   141→    return () => observer.disconnect();
+   142→  }, [videos, loading]);
+   143→
+   144→  const toggleLike = async (v: VideoPost) => {
+   145→    const liked = !likedIds.has(v.id);
+   146→    const next = new Set(likedIds);
+   147→    if (liked) next.add(v.id);
+   148→    else next.delete(v.id);
+   149→    setLikedIds(next);
+   150→    try {
+   151→      window.localStorage.setItem(LIKES_KEY, JSON.stringify(Array.from(next)));
+   152→    } catch {
+   153→      // abaikan
+   154→    }
+   155→    setVideos((prev) => prev.map((p) => (p.id === v.id ? { ...p, likes: Math.max(0, p.likes + (liked ? 1 : -1)) } : p)));
+   156→    try {
+   157→      await fetch(`/api/videos/${v.id}/like`, {
+   158→        method: "POST",
+   159→        headers: { "Content-Type": "application/json" },
+   160→        body: JSON.stringify({ liked }),
+   161→      });
+   162→    } catch {
+   163→      toast({ title: "Gagal menyimpan suka", variant: "destructive" });
+   164→    }
+   165→  };
+   166→
+   167→  const shareVideo = async (v: VideoPost) => {
+   168→    const url = `${window.location.origin}${v.videoUrl}`;
+   169→    try {
+   170→      if (navigator.share) {
+   171→        await navigator.share({ title: v.title, text: `Tonton "${v.title}" di Beranda`, url });
+   172→        return;
+   173→      }
+   174→      throw new Error("no-share");
+   175→    } catch {
+   176→      try {
+   177→        await navigator.clipboard.writeText(url);
+   178→        toast({ title: "Tautan video disalin" });
+   179→      } catch {
+   180→        toast({ title: "Gagal menyalin tautan", variant: "destructive" });
+   181→      }
+   182→    }
+   183→  };
+   184→
+   185→  // ---------- Kelola video (edit/hapus sesuai peran) ----------
+   186→  const deleteVideo = async (v: VideoPost) => {
+   187→    try {
+   188→      const res = await fetch(`/api/videos/${v.id}`, { method: "DELETE" });
+   189→      const data = (await res.json()) as { error?: string };
+   190→      if (!res.ok) throw new Error(data.error ?? "Gagal menghapus video");
+   191→      setVideos((prev) => prev.filter((p) => p.id !== v.id));
+   192→      toast({ title: "Video dihapus dari Beranda" });
+   193→    } catch (e) {
+   194→      toast({ title: e instanceof Error ? e.message : "Gagal menghapus video", variant: "destructive" });
+   195→    } finally {
+   196→      setDeleteTarget(null);
+   197→    }
+   198→  };
+   199→
+   200→  return (
+   201→    <div className="h-full flex flex-col bg-black">
+   202→      {/* Tab kategori */}
+   203→      <div
+   204→        className="shrink-0 bg-black/95 border-b border-white/10 px-2 pt-2 pb-2 flex gap-1.5 overflow-x-auto wa-scrollbar"
+   205→        role="tablist"
+   206→        aria-label="Kategori video"
+   207→      >
+   208→        {TABS.map((t) => (
+   209→          <button
+   210→            key={t.id}
+   211→            type="button"
+   212→            role="tab"
+   213→            aria-selected={tab === t.id}
+   214→            onClick={() => setTab(t.id)}
+   215→            className={cn(
+   216→              "px-3.5 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors",
+   217→              tab === t.id
+   218→                ? "bg-white text-black font-semibold"
+   219→                : "bg-white/10 text-white/70 hover:bg-white/20"
+   220→            )}
+   221→          >
+   222→            {t.label}
+   223→          </button>
+   224→        ))}
+   225→      </div>
+   226→
+   227→      {/* Feed vertikal */}
+   228→      <div className="flex-1 min-h-0 flex justify-center bg-black">
+   229→        <div ref={feedRef} className="w-full md:max-w-[480px] h-full overflow-y-auto snap-y snap-mandatory wa-scrollbar md:border-x md:border-white/10">
+   230→          {loading && (
+   231→            <div className="h-full flex items-center justify-center">
+   232→              <Loader2 className="h-8 w-8 text-white/50 animate-spin" aria-label="Memuat video" />
+   233→            </div>
+   234→          )}
+   235→
+   236→          {!loading && videos.length === 0 && (
+   237→            <div className="h-full flex flex-col items-center justify-center text-center px-8 gap-3">
+   238→              <span className="h-16 w-16 rounded-full bg-white/10 flex items-center justify-center">
+   239→                <Film className="h-7 w-7 text-white/50" aria-hidden="true" />
+   240→              </span>
+   241→              <p className="text-white font-medium">Belum ada video di kategori ini</p>
+   242→              <p className="text-sm text-white/50 leading-relaxed">
+   243→                Video yang dikirim pengguna akan tampil di sini. Jadilah yang pertama mengirim!
+   244→              </p>
+   245→              <Button onClick={() => setUploadOpen(true)} className="mt-2 bg-white text-black hover:bg-white/90">
+   246→                <Send className="h-4 w-4" /> Kirim Video
+   247→              </Button>
+   248→            </div>
+   249→          )}
+   250→
+   251→          {!loading &&
+   252→            videos.map((v) => (
+   253→              <FeedItem
+   254→                key={v.id}
+   255→                video={v}
+   256→                muted={muted}
+   257→                onToggleMute={() => setMuted((m) => !m)}
+   258→                liked={likedIds.has(v.id)}
+   259→                onLike={() => void toggleLike(v)}
+   260→                onShare={() => void shareVideo(v)}
+   261→                onAuthorClick={() => onNavigate?.("marketplace")}
+   262→                canEdit={canManageVideo(user?.role, v.authorUserId, user?.id)}
+   263→                onEdit={() => setEditTarget(v)}
+   264→                onDelete={() => setDeleteTarget(v)}
+   265→              />
+   266→            ))}
+   267→        </div>
+   268→      </div>
+   269→
+   270→      <UploadDialog
+   271→        open={uploadOpen}
+   272→        onOpenChange={setUploadOpen}
+   273→        onUploaded={(created) => {
+   274→          setTab("umum");
+   275→          setVideos((prev) => [created, ...prev]);
+   276→        }}
+   277→      />
+   278→
+   279→      {/* Dialog edit video (Super Admin/Admin/pemilik) */}
+   280→      <VideoEditDialog
+   281→        open={!!editTarget}
+   282→        onOpenChange={(o) => {
+   283→          if (!o) setEditTarget(null);
+   284→        }}
+   285→        video={editTarget}
+   286→        onSaved={(updated) => {
+   287→          setVideos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+   288→          toast({ title: "Perubahan video tersimpan" });
+   289→        }}
+   290→      />
+   291→
+   292→      {/* Konfirmasi hapus video */}
+   293→      <ConfirmDialog
+   294→        open={!!deleteTarget}
+   295→        onOpenChange={(o) => {
+   296→          if (!o) setDeleteTarget(null);
+   297→        }}
+   298→        title="Hapus video ini?"
+   299→        description={`"${deleteTarget?.title ?? ""}" akan dihapus permanen dari Beranda.`}
+   300→        confirmLabel="Hapus"
+   301→        destructive
+   302→        onConfirm={() => deleteTarget && void deleteVideo(deleteTarget)}
+   303→      />
+   304→    </div>
+   305→  );
+   306→}
+   307→
+   308→// ---------- Satu item feed ----------
+   309→function FeedItem({
+   310→  video,
+   311→  muted,
+   312→  onToggleMute,
+   313→  liked,
+   314→  onLike,
+   315→  onShare,
+   316→  onAuthorClick,
+   317→  canEdit,
+   318→  onEdit,
+   319→  onDelete,
+   320→}: {
+   321→  video: VideoPost;
+   322→  muted: boolean;
+   323→  onToggleMute: () => void;
+   324→  liked: boolean;
+   325→  onLike: () => void;
+   326→  onShare: () => void;
+   327→  onAuthorClick: () => void;
+   328→  canEdit: boolean;
+   329→  onEdit: () => void;
+   330→  onDelete: () => void;
+   331→}) {
+   332→  const vidRef = useRef<HTMLVideoElement>(null);
+   333→  const [paused, setPaused] = useState(false);
+   334→  const [progress, setProgress] = useState(0);
+   335→
+   336→  const togglePlay = () => {
+   337→    const vid = vidRef.current;
+   338→    if (!vid) return;
+   339→    if (vid.paused) {
+   340→      vid.play().catch(() => {});
+   341→      setPaused(false);
+   342→    } else {
+   343→      vid.pause();
+   344→      setPaused(true);
+   345→    }
+   346→  };
+   347→
+   348→  const initials = video.authorName.slice(0, 2).toUpperCase();
+   349→
+   350→  return (
+   351→    <div data-feed-item className="relative h-full w-full snap-start snap-always overflow-hidden bg-neutral-950">
+   352→      <video
+   353→        ref={vidRef}
+   354→        src={video.videoUrl}
+   355→        poster={video.posterUrl || undefined}
+   356→        loop
+   357→        muted={muted}
+   358→        playsInline
+   359→        preload="metadata"
+   360→        className="absolute inset-0 h-full w-full object-cover"
+   361→        onClick={togglePlay}
+   362→        onTimeUpdate={(e) => {
+   363→          const el = e.currentTarget;
+   364→          setProgress(el.duration ? (el.currentTime / el.duration) * 100 : 0);
+   365→        }}
+   366→        aria-label={`Video: ${video.title}`}
+   367→      />
+   368→
+   369→      {/* Tombol play saat dijeda */}
+   370→      {paused && (
+   371→        <button
+   372→          type="button"
+   373→          onClick={togglePlay}
+   374→          aria-label="Putar video"
+   375→          className="absolute inset-0 flex items-center justify-center"
+   376→        >
+   377→          <span className="h-16 w-16 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+   378→            <Play className="h-7 w-7 text-white fill-white" />
+   379→          </span>
+   380→        </button>
+   381→      )}
+   382→
+   383→      {/* Toggle suara */}
+   384→      <button
+   385→        type="button"
+   386→        onClick={onToggleMute}
+   387→        aria-label={muted ? "Nyalakan suara" : "Bisukan suara"}
+   388→        className="absolute top-3 right-3 h-9 w-9 rounded-full bg-black/45 text-white flex items-center justify-center backdrop-blur-sm hover:bg-black/60 transition-colors z-10"
+   389→      >
+   390→        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+   391→      </button>
+   392→
+   393→      {/* Aksi kanan */}
+   394→      <div className="absolute right-3 bottom-28 flex flex-col items-center gap-4 z-10">
+   395→        <button
+   396→          type="button"
+   397→          onClick={onLike}
+   398→          aria-label={liked ? "Batal suka" : "Suka video"}
+   399→          aria-pressed={liked}
+   400→          className="flex flex-col items-center gap-1 text-white"
+   401→        >
+   402→          <span className="h-11 w-11 rounded-full bg-black/45 flex items-center justify-center backdrop-blur-sm hover:bg-black/60 transition-colors">
+   403→            <Heart className={cn("h-6 w-6", liked && "fill-red-500 text-red-500")} />
+   404→          </span>
+   405→          <span className="text-[11px] font-semibold">{video.likes.toLocaleString("id-ID")}</span>
+   406→        </button>
+   407→        <button
+   408→          type="button"
+   409→          onClick={onShare}
+   410→          aria-label="Bagikan video"
+   411→          className="flex flex-col items-center gap-1 text-white"
+   412→        >
+   413→          <span className="h-11 w-11 rounded-full bg-black/45 flex items-center justify-center backdrop-blur-sm hover:bg-black/60 transition-colors">
+   414→            <Share2 className="h-5 w-5" />
+   415→          </span>
+   416→          <span className="text-[11px] font-semibold">Bagikan</span>
+   417→        </button>
+   418→        {canEdit && (
+   419→          <>
+   420→            <button
+   421→              type="button"
+   422→              onClick={onEdit}
+   423→              aria-label="Edit video"
+   424→              className="flex flex-col items-center gap-1 text-white"
+   425→            >
+   426→              <span className="h-11 w-11 rounded-full bg-black/45 flex items-center justify-center backdrop-blur-sm hover:bg-black/60 transition-colors">
+   427→                <Pencil className="h-5 w-5" />
+   428→              </span>
+   429→              <span className="text-[11px] font-semibold">Edit</span>
+   430→            </button>
+   431→            <button
+   432→              type="button"
+   433→              onClick={onDelete}
+   434→              aria-label="Hapus video"
+   435→              className="flex flex-col items-center gap-1 text-white"
+   436→            >
+   437→              <span className="h-11 w-11 rounded-full bg-black/45 flex items-center justify-center backdrop-blur-sm hover:bg-black/60 transition-colors">
+   438→                <Trash2 className="h-5 w-5 text-red-400" />
+   439→              </span>
+   440→              <span className="text-[11px] font-semibold">Hapus</span>
+   441→            </button>
+   442→          </>
+   443→        )}
+   444→      </div>
+   445→
+   446→      {/* Info penulis */}
+   447→      <div className="absolute left-0 right-16 bottom-0 p-4 pb-6 z-10 text-white">
+   448→        <button
+   449→          type="button"
+   450→          onClick={onAuthorClick}
+   451→          className="flex items-center gap-2.5 mb-2 group"
+   452→          aria-label={`Lihat penjual ${video.authorName}`}
+   453→        >
+   454→          <span className="h-9 w-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-[13px] font-bold ring-2 ring-white/60 shrink-0">
+   455→            {initials}
+   456→          </span>
+   457→          <span className="font-semibold text-sm group-hover:underline">{video.authorName}</span>
+   458→          {video.isFollowing && <UserCheck className="h-3.5 w-3.5 text-emerald-300" aria-label="Diikuti" />}
+   459→          {video.isFollower && <Users className="h-3.5 w-3.5 text-sky-300" aria-label="Pengikut" />}
+   460→        </button>
+   461→        <p className="text-sm leading-snug drop-shadow line-clamp-2">{video.title}</p>
+   462→        <div className="flex items-center gap-2 mt-2">
+   463→          <span className="text-[11px] font-semibold bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5">
+   464→            {CATEGORY_LABEL[video.category] ?? video.category}
+   465→          </span>
+   466→          <span className="text-[11px] text-white/70 flex items-center gap-1">
+   467→            <MapPin className="h-3 w-3" /> Yogyakarta
+   468→          </span>
+   469→          <span className="text-[11px] text-white/50">{timeAgo(video.createdAt)}</span>
+   470→        </div>
+   471→      </div>
+   472→
+   473→      {/* Progres */}
+   474→      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/15 z-10">
+   475→        <div className="h-full bg-white/80 transition-[width] duration-150" style={{ width: `${progress}%` }} />
+   476→      </div>
+   477→    </div>
+   478→  );
+   479→}
+   480→
+   481→// ---------- Dialog kirim video ----------
+   482→function UploadDialog({
+   483→  open,
+   484→  onOpenChange,
+   485→  onUploaded,
+   486→}: {
+   487→  open: boolean;
+   488→  onOpenChange: (v: boolean) => void;
+   489→  onUploaded: (v: VideoPost) => void;
+   490→}) {
+   491→  const { toast } = useToast();
+   492→  const [file, setFile] = useState<File | null>(null);
+   493→  const [title, setTitle] = useState("");
+   494→  const [category, setCategory] = useState<TabId>("hiburan");
+   495→  const [busy, setBusy] = useState(false);
+   496→  const [previewUrl, setPreviewUrl] = useState<string>("");
+   497→
+   498→  const reset = () => {
+   499→    setFile(null);
+   500→    setTitle("");
+   501→    setCategory("hiburan");
+   502→    setPreviewUrl("");
+   503→  };
+   504→
+   505→  const submit = async () => {
+   506→    if (!file || !title.trim()) return;
+   507→    setBusy(true);
+   508→    try {
+   509→      const fd = new FormData();
+   510→      fd.append("file", file);
+   511→      fd.append("kind", "video");
+   512→      const up = await fetch("/api/upload", { method: "POST", body: fd });
+   513→      const upData = (await up.json()) as { url?: string; error?: string };
+   514→      if (!up.ok || !upData.url) throw new Error(upData.error ?? "Gagal mengunggah video");
+   515→
+   516→      const res = await fetch("/api/videos", {
+   517→        method: "POST",
+   518→        headers: { "Content-Type": "application/json" },
+   519→        body: JSON.stringify({ title: title.trim(), category, videoUrl: upData.url, authorName: "Saya" }),
+   520→      });
+   521→      const data = (await res.json()) as { video?: VideoPost; error?: string };
+   522→      if (!res.ok || !data.video) throw new Error(data.error ?? "Gagal mengirim video");
+   523→
+   524→      toast({ title: "Video terkirim ke Beranda 🎉" });
+   525→      onUploaded(data.video);
+   526→      onOpenChange(false);
+   527→      reset();
+   528→    } catch (e) {
+   529→      toast({ title: e instanceof Error ? e.message : "Gagal mengirim video", variant: "destructive" });
+   530→    } finally {
+   531→      setBusy(false);
+   532→    }
+   533→  };
+   534→
+   535→  return (
+   536→    <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
+   537→      <DialogContent className="sm:max-w-md">
+   538→        <DialogHeader>
+   539→          <DialogTitle>Kirim Video ke Beranda</DialogTitle>
+   540→          <DialogDescription>Video yang Anda kirim akan tampil di feed Beranda pengguna lain.</DialogDescription>
+   541→        </DialogHeader>
+   542→        <div className="space-y-4">
+   543→          <div className="space-y-1.5">
+   544→            <Label htmlFor="video-file">File video</Label>
+   545→            {previewUrl ? (
+   546→              <div className="relative rounded-lg overflow-hidden border border-border bg-black">
+   547→                <video src={previewUrl} className="w-full max-h-44 object-contain" muted playsInline controls />
+   548→                <Button
+   549→                  type="button"
+   550→                  variant="secondary"
+   551→                  size="sm"
+   552→                  className="absolute top-2 right-2"
+   553→                  onClick={() => { setFile(null); setPreviewUrl(""); }}
+   554→                >
+   555→                  Ganti
+   556→                </Button>
+   557→              </div>
+   558→            ) : (
+   559→              <label
+   560→                htmlFor="video-file"
+   561→                className="flex flex-col items-center justify-center gap-2 h-32 rounded-lg border-2 border-dashed border-border bg-secondary/40 cursor-pointer hover:bg-secondary/70 transition-colors"
+   562→              >
+   563→                <Film className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+   564→                <span className="text-sm text-muted-foreground">Ketuk untuk pilih video</span>
+   565→                <span className="text-[11px] text-muted-foreground/70">MP4 / WebM · maks 30 MB</span>
+   566→              </label>
+   567→            )}
+   568→            <input
+   569→              id="video-file"
+   570→              type="file"
+   571→              accept="video/*"
+   572→              className="sr-only"
+   573→              onChange={(e) => {
+   574→                const f = e.target.files?.[0] ?? null;
+   575→                setFile(f);
+   576→                setPreviewUrl(f ? URL.createObjectURL(f) : "");
+   577→              }}
+   578→            />
+   579→          </div>
+   580→          <div className="space-y-1.5">
+   581→            <Label htmlFor="video-title">Judul</Label>
+   582→            <Input
+   583→              id="video-title"
+   584→              value={title}
+   585→              onChange={(e) => setTitle(e.target.value)}
+   586→              placeholder="Contoh: Promo Bakpia Lebaran"
+   587→              maxLength={90}
+   588→            />
+   589→          </div>
+   590→          <div className="space-y-1.5">
+   591→            <Label>Kategori</Label>
+   592→            <div className="flex gap-1.5" role="radiogroup" aria-label="Kategori video">
+   593→              {(["hiburan", "domisili", "promo"] as const).map((c) => (
+   594→                <button
+   595→                  key={c}
+   596→                  type="button"
+   597→                  role="radio"
+   598→                  aria-checked={category === c}
+   599→                  onClick={() => setCategory(c)}
+   600→                  className={cn(
+   601→                    "px-3 py-1.5 rounded-full text-[13px] transition-colors",
+   602→                    category === c ? "bg-primary text-primary-foreground font-semibold" : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+   603→                  )}
+   604→                >
+   605→                  {CATEGORY_LABEL[c]}
+   606→                </button>
+   607→              ))}
+   608→            </div>
+   609→          </div>
+   610→        </div>
+   611→        <DialogFooter>
+   612→          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+   613→            Batal
+   614→          </Button>
+   615→          <Button onClick={() => void submit()} disabled={busy || !file || !title.trim()}>
+   616→            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Kirim
+   617→          </Button>
+   618→        </DialogFooter>
+   619→      </DialogContent>
+   620→    </Dialog>
+   621→  );
+   622→}
+   623→
+   624→// ---------- Dialog edit video ----------
+   625→function VideoEditDialog({
+   626→  open,
+   627→  onOpenChange,
+   628→  video,
+   629→  onSaved,
+   630→}: {
+   631→  open: boolean;
+   632→  onOpenChange: (v: boolean) => void;
+   633→  video: VideoPost | null;
+   634→  onSaved: (v: VideoPost) => void;
+   635→}) {
+   636→  const { toast } = useToast();
+   637→  const [title, setTitle] = useState("");
+   638→  const [category, setCategory] = useState<TabId>("hiburan");
+   639→  const [busy, setBusy] = useState(false);
+   640→
+   641→  useEffect(() => {
+   642→    if (!open || !video) return;
+   643→    setTitle(video.title);
+   644→    setCategory((video.category as TabId) ?? "hiburan");
+   645→  }, [open, video]);
+   646→
+   647→  const submit = async () => {
+   648→    if (!video || !title.trim()) return;
+   649→    setBusy(true);
+   650→    try {
+   651→      const res = await fetch(`/api/videos/${video.id}`, {
+   652→        method: "PATCH",
+   653→        headers: { "Content-Type": "application/json" },
+   654→        body: JSON.stringify({ title: title.trim(), category }),
+   655→      });
+   656→      const data = (await res.json()) as { video?: VideoPost; error?: string };
+   657→      if (!res.ok || !data.video) throw new Error(data.error ?? "Gagal menyimpan perubahan");
+   658→      onSaved(data.video);
+   659→      onOpenChange(false);
+   660→    } catch (e) {
+   661→      toast({ title: e instanceof Error ? e.message : "Gagal menyimpan perubahan", variant: "destructive" });
+   662→    } finally {
+   663→      setBusy(false);
+   664→    }
+   665→  };
+   666→
+   667→  return (
+   668→    <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
+   669→      <DialogContent className="sm:max-w-md">
+   670→        <DialogHeader>
+   671→          <DialogTitle>Edit Video</DialogTitle>
+   672→          <DialogDescription>Ubah judul atau kategori video di feed Beranda.</DialogDescription>
+   673→        </DialogHeader>
+   674→        <div className="space-y-4">
+   675→          <div className="space-y-1.5">
+   676→            <Label htmlFor="edit-video-title">Judul</Label>
+   677→            <Textarea
+   678→              id="edit-video-title"
+   679→              value={title}
+   680→              onChange={(e) => setTitle(e.target.value)}
+   681→              placeholder="Judul video"
+   682→              rows={2}
+   683→              maxLength={120}
+   684→            />
+   685→          </div>
+   686→          <div className="space-y-1.5">
+   687→            <Label>Kategori</Label>
+   688→            <div className="flex gap-1.5" role="radiogroup" aria-label="Kategori video">
+   689→              {(["hiburan", "domisili", "promo"] as const).map((c) => (
+   690→                <button
+   691→                  key={c}
+   692→                  type="button"
+   693→                  role="radio"
+   694→                  aria-checked={category === c}
+   695→                  onClick={() => setCategory(c)}
+   696→                  className={cn(
+   697→                    "px-3 py-1.5 rounded-full text-[13px] transition-colors",
+   698→                    category === c ? "bg-primary text-primary-foreground font-semibold" : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+   699→                  )}
+   700→                >
+   701→                  {CATEGORY_LABEL[c]}
+   702→                </button>
+   703→              ))}
+   704→            </div>
+   705→          </div>
+   706→        </div>
+   707→        <DialogFooter>
+   708→          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+   709→            Batal
+   710→          </Button>
+   711→          <Button onClick={() => void submit()} disabled={busy || !title.trim()}>
+   712→            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Simpan
+   713→          </Button>
+   714→        </DialogFooter>
+   715→      </DialogContent>
+   716→    </Dialog>
+   717→  );
+   718→}
+   719→

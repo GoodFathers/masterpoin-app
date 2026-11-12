@@ -1,0 +1,656 @@
+     1→"use client";
+     2→
+     3→import { useState } from "react";
+     4→import {
+     5→  BellOff,
+     6→  BellRing,
+     7→  ChevronRight,
+     8→  CircleSlash,
+     9→  CircleUserRound,
+    10→  Download,
+    11→  Eraser,
+    12→  Flag,
+    13→  Heart,
+    14→  MoreVertical,
+    15→  Palette,
+    16→  Pin,
+    17→  Search,
+    18→  SquareCheckBig,
+    19→  Timer,
+    20→  Trash2,
+    21→  Users,
+    22→  XCircle,
+    23→} from "lucide-react";
+    24→import { Button } from "@/components/ui/button";
+    25→import {
+    26→  DropdownMenu,
+    27→  DropdownMenuContent,
+    28→  DropdownMenuItem,
+    29→  DropdownMenuSeparator,
+    30→  DropdownMenuSub,
+    31→  DropdownMenuSubContent,
+    32→  DropdownMenuSubTrigger,
+    33→  DropdownMenuTrigger,
+    34→} from "@/components/ui/dropdown-menu";
+    35→import {
+    36→  AlertDialog,
+    37→  AlertDialogAction,
+    38→  AlertDialogCancel,
+    39→  AlertDialogContent,
+    40→  AlertDialogDescription,
+    41→  AlertDialogFooter,
+    42→  AlertDialogHeader,
+    43→  AlertDialogTitle,
+    44→} from "@/components/ui/alert-dialog";
+    45→import {
+    46→  Dialog,
+    47→  DialogContent,
+    48→  DialogDescription,
+    49→  DialogFooter,
+    50→  DialogHeader,
+    51→  DialogTitle,
+    52→} from "@/components/ui/dialog";
+    53→import { Label } from "@/components/ui/label";
+    54→import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+    55→import { useToast } from "@/hooks/use-toast";
+    56→import { cn, getInitials } from "@/lib/wa-utils";
+    57→import { CHAT_UI_EVENTS, useChatUi } from "@/store/chat-ui";
+    58→import ChatAvatar from "@/components/chat/ChatAvatar";
+    59→
+    60→/**
+    61→ * Isi menu titik-tiga obrolan (Gambar 1) sebagai HOOK yang dapat dipakai ulang:
+    62→ * - menuItems : daftar DropdownMenuItem (tanpa pemicu) — tempel di dalam
+    63→ *               DropdownMenuContent / DropdownMenuSubContent mana pun.
+    64→ * - dialogs   : semua dialog (Info kontak, Pesan sementara, Tema obrolan,
+    65→ *               konfirmasi) — render di LUAR menu agar tetap terpasang
+    66→ *               ketika dropdown tertutup.
+    67→ * - resetInline : menciutkan kembali bagian yang dibuka pada mode inline.
+    68→ *
+    69→ * Opsi `inlineSubs: true` (dipakai TopBar untuk mobile/tablet): sub-menu
+    70→ * MELAYANG diganti bagian yang bisa dibuka-tutup DI DALAM menu yang sama —
+    71→ * pada layar sempit sub-menu melayang pernah terposisi keluar layar sehingga
+    72→ * isinya tidak terbaca. Desktop (≥lg) tetap memakai sub-menu melayang.
+    73→ *
+    74→ * Dipakai oleh ObrolanMenu (menu mandiri, desktop ≥lg) dan TopBar
+    75→ * (bagian "Menu Obrolan" pada titik-3 kanan untuk mobile/tablet).
+    76→ */
+    77→const FAV_KEY = "indigoo:fav-chats";
+    78→const WALLPAPER_KEY = "indigoo:wallpaper";
+    79→const ephemeralKey = (chatId: string) => `indigoo:ephemeral:${chatId}`;
+    80→
+    81→const EPHEMERAL_OPTIONS = [
+    82→  { id: "off", label: "Matikan" },
+    83→  { id: "24h", label: "24 jam" },
+    84→  { id: "7d", label: "7 hari" },
+    85→  { id: "90d", label: "90 hari" },
+    86→];
+    87→
+    88→const WALLPAPERS = [
+    89→  { id: "", label: "Bawaan", color: "" },
+    90→  { id: "#e8f5ec", label: "Hijau Lembut", color: "#e8f5ec" },
+    91→  { id: "#fbf3e2", label: "Krem Hangat", color: "#fbf3e2" },
+    92→  { id: "#fcecea", label: "Rose Lembut", color: "#fcecea" },
+    93→  { id: "#eaf3ee", label: "Sage", color: "#eaf3ee" },
+    94→  { id: "#1f2a24", label: "Hijau Gelap", color: "#1f2a24" },
+    95→];
+    96→
+    97→type ConfirmKind = "report" | "block" | "clear" | "delete";
+    98→
+    99→function readFavs(): string[] {
+   100→  try {
+   101→    const raw = JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]");
+   102→    return Array.isArray(raw) ? (raw as string[]) : [];
+   103→  } catch {
+   104→    return [];
+   105→  }
+   106→}
+   107→
+   108→function readEphemeral(chatId: string): string {
+   109→  return localStorage.getItem(ephemeralKey(chatId)) ?? "off";
+   110→}
+   111→
+   112→export function useObrolanMenu(onGoToChats: () => void, opts?: { inlineSubs?: boolean }) {
+   113→  const inlineSubs = opts?.inlineSubs ?? false;
+   114→  const { toast } = useToast();
+   115→  const chat = useChatUi((s) => s.activeChat);
+   116→  const setActiveChat = useChatUi((s) => s.setActiveChat);
+   117→
+   118→  const [infoOpen, setInfoOpen] = useState(false);
+   119→  const [muteOpen, setMuteOpen] = useState(false);
+   120→  const [ephOpen, setEphOpen] = useState(false);
+   121→  const [ephValue, setEphValue] = useState("off");
+   122→  const [themeOpen, setThemeOpen] = useState(false);
+   123→  const [wallpaper, setWallpaper] = useState("");
+   124→  const [confirmKind, setConfirmKind] = useState<ConfirmKind | null>(null);
+   125→  const [busy, setBusy] = useState(false);
+   126→  const [, setFavTick] = useState(0);
+   127→
+   128→  const isGroup = chat?.type === "GROUP";
+   129→  const isFav = typeof window !== "undefined" && chat ? readFavs().includes(chat.id) : false;
+   130→
+   131→  const needChat = () =>
+   132→    toast({
+   133→      title: "Belum ada obrolan aktif",
+   134→      description: "Buka salah satu chat terlebih dahulu untuk memakai menu ini.",
+   135→    });
+   136→
+   137→  /** PATCH properti chat + sinkronkan store & daftar chat. */
+   138→  const patchChat = async (patch: Record<string, unknown>, successTitle: string) => {
+   139→    if (!chat) return;
+   140→    try {
+   141→      const res = await fetch(`/api/chats/${chat.id}`, {
+   142→        method: "PATCH",
+   143→        headers: { "Content-Type": "application/json" },
+   144→        body: JSON.stringify(patch),
+   145→      });
+   146→      if (!res.ok) throw new Error();
+   147→      const data = (await res.json().catch(() => null)) as { chat?: typeof chat } | null;
+   148→      if (data?.chat) setActiveChat(data.chat);
+   149→      window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.chatsRefresh));
+   150→      toast({ title: successTitle });
+   151→    } catch {
+   152→      toast({ title: "Gagal memperbarui obrolan", variant: "destructive" });
+   153→    }
+   154→  };
+   155→
+   156→  const toggleFavorite = () => {
+   157→    if (!chat) return needChat();
+   158→    const favs = readFavs();
+   159→    const next = favs.includes(chat.id) ? favs.filter((id) => id !== chat.id) : [...favs, chat.id];
+   160→    localStorage.setItem(FAV_KEY, JSON.stringify(next));
+   161→    setFavTick((t) => t + 1);
+   162→    toast({
+   163→      title: favs.includes(chat.id) ? "Dihapus dari favorit" : "Ditambahkan ke favorit",
+   164→      description: chat.name,
+   165→    });
+   166→  };
+   167→
+   168→  const focusSearch = () => {
+   169→    onGoToChats();
+   170→    // Tunggu Radix selesai mengembalikan fokus ke trigger, baru fokuskan kolom pencarian
+   171→    window.setTimeout(() => window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.focusSearch)), 350);
+   172→  };
+   173→
+   174→  const closeChat = () => {
+   175→    if (!chat) return needChat();
+   176→    setActiveChat(null);
+   177→    window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.closeActiveChat));
+   178→    onGoToChats();
+   179→    toast({ title: "Obrolan ditutup", description: chat.name });
+   180→  };
+   181→
+   182→  const exportChat = async () => {
+   183→    if (!chat) return needChat();
+   184→    try {
+   185→      const res = await fetch(`/api/chats/${chat.id}/messages`, { cache: "no-store" });
+   186→      const data = (await res.json()) as {
+   187→        messages?: { createdAt: string; sender: string; senderName?: string; type: string; body: string }[];
+   188→      };
+   189→      const msgs = data.messages ?? [];
+   190→      const lines = [
+   191→        `Ekspor Obrolan IndiGoo — ${chat.name}`,
+   192→        `Diekspor: ${new Date().toLocaleString("id-ID")}`,
+   193→        `Jumlah pesan: ${msgs.length}`,
+   194→        "",
+   195→      ];
+   196→      for (const m of msgs) {
+   197→        const who = m.sender === "me" ? "Anda" : m.sender === "system" ? "Sistem" : m.senderName || chat.name;
+   198→        lines.push(`[${new Date(m.createdAt).toLocaleString("id-ID")}] ${who}: ${m.body || `[${m.type}]`}`);
+   199→      }
+   200→      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+   201→      const url = URL.createObjectURL(blob);
+   202→      const a = document.createElement("a");
+   203→      a.href = url;
+   204→      a.download = `IndiGoo-Obrolan-${chat.name.replace(/[^\w-]+/g, "_")}.txt`;
+   205→      document.body.appendChild(a);
+   206→      a.click();
+   207→      a.remove();
+   208→      URL.revokeObjectURL(url);
+   209→      toast({ title: "Obrolan diekspor", description: "Berkas .txt berhasil diunduh." });
+   210→    } catch {
+   211→      toast({ title: "Gagal mengekspor obrolan", variant: "destructive" });
+   212→    }
+   213→  };
+   214→
+   215→  const applyWallpaper = (id: string) => {
+   216→    setWallpaper(id);
+   217→    localStorage.setItem(WALLPAPER_KEY, id);
+   218→    window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.wallpaperChanged, { detail: { id } }));
+   219→  };
+   220→
+   221→  const saveEphemeral = () => {
+   222→    if (!chat) return;
+   223→    localStorage.setItem(ephemeralKey(chat.id), ephValue);
+   224→    const label = EPHEMERAL_OPTIONS.find((o) => o.id === ephValue)?.label ?? ephValue;
+   225→    toast({ title: "Pesan sementara", description: `Timer: ${label}` });
+   226→    setEphOpen(false);
+   227→  };
+   228→
+   229→  const toggleBlock = async () => {
+   230→    if (!chat?.contact) return;
+   231→    const blocked = !chat.contact.blocked;
+   232→    setBusy(true);
+   233→    try {
+   234→      const res = await fetch(`/api/contacts/${chat.contact.id}`, {
+   235→        method: "PATCH",
+   236→        headers: { "Content-Type": "application/json" },
+   237→        body: JSON.stringify({ blocked }),
+   238→      });
+   239→      if (!res.ok) throw new Error();
+   240→      setActiveChat({ ...chat, contact: { ...chat.contact, blocked } });
+   241→      window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.chatsRefresh));
+   242→      toast({
+   243→        title: blocked ? "Kontak diblokir" : "Blokir dibuka",
+   244→        description: chat.contact.name,
+   245→      });
+   246→    } catch {
+   247→      toast({ title: "Gagal memperbarui blokir", variant: "destructive" });
+   248→    } finally {
+   249→      setBusy(false);
+   250→    }
+   251→  };
+   252→
+   253→  const clearChat = async () => {
+   254→    if (!chat) return;
+   255→    setBusy(true);
+   256→    try {
+   257→      const res = await fetch(`/api/chats/${chat.id}/messages`, { method: "DELETE" });
+   258→      if (!res.ok) throw new Error();
+   259→      window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.chatCleared, { detail: { chatId: chat.id } }));
+   260→      window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.chatsRefresh));
+   261→      toast({ title: "Obrolan dibersihkan", description: "Semua pesan telah dihapus." });
+   262→    } catch {
+   263→      toast({ title: "Gagal membersihkan obrolan", variant: "destructive" });
+   264→    } finally {
+   265→      setBusy(false);
+   266→    }
+   267→  };
+   268→
+   269→  const deleteChat = async () => {
+   270→    if (!chat) return;
+   271→    setBusy(true);
+   272→    try {
+   273→      const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
+   274→      if (!res.ok) throw new Error();
+   275→      setActiveChat(null);
+   276→      window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.closeActiveChat));
+   277→      window.dispatchEvent(new CustomEvent(CHAT_UI_EVENTS.chatsRefresh));
+   278→      toast({ title: "Obrolan dihapus", description: chat.name });
+   279→    } catch {
+   280→      toast({ title: "Gagal menghapus obrolan", variant: "destructive" });
+   281→    } finally {
+   282→      setBusy(false);
+   283→    }
+   284→  };
+   285→
+   286→  const memberCount = (() => {
+   287→    if (!chat || chat.type !== "GROUP") return 0;
+   288→    try {
+   289→      const members = JSON.parse(chat.members) as unknown[];
+   290→      return Array.isArray(members) ? members.length : 0;
+   291→    } catch {
+   292→      return 0;
+   293→    }
+   294→  })();
+   295→
+   296→  const confirmCopy: Record<ConfirmKind, { title: string; desc: string; action: string }> = {
+   297→    report: {
+   298→      title: "Laporkan kontak ini?",
+   299→      desc: `Laporan tentang ${chat?.name ?? "kontak ini"} akan dikirim ke IndiGoo. Pesan terbaru akan diteruskan untuk ditinjau.`,
+   300→      action: "Laporkan",
+   301→    },
+   302→    block: {
+   303→      title: chat?.contact?.blocked ? "Buka blokir kontak?" : "Blokir kontak ini?",
+   304→      desc: chat?.contact?.blocked
+   305→        ? `${chat?.name ?? "Kontak"} akan dapat mengirim pesan dan panggilan lagi.`
+   306→        : `${chat?.name ?? "Kontak"} tidak akan bisa mengirim pesan ke Anda lagi.`,
+   307→      action: chat?.contact?.blocked ? "Buka blokir" : "Blokir",
+   308→    },
+   309→    clear: {
+   310→      title: "Bersihkan obrolan ini?",
+   311→      desc: `Semua pesan dengan ${chat?.name ?? "kontak ini"} akan dihapus permanen, namun obrolannya tetap ada di daftar chat.`,
+   312→      action: "Bersihkan",
+   313→    },
+   314→    delete: {
+   315→      title: "Hapus obrolan ini?",
+   316→      desc: `Obrolan dengan ${chat?.name ?? "kontak ini"} beserta seluruh pesan di dalamnya akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.`,
+   317→      action: "Hapus",
+   318→    },
+   319→  };
+   320→
+   321→  const runConfirm = async () => {
+   322→    if (!confirmKind) return;
+   323→    if (confirmKind === "report") {
+   324→      toast({ title: "Laporan terkirim", description: "Terima kasih, laporan Anda akan ditinjau." });
+   325→    } else if (confirmKind === "block") {
+   326→      await toggleBlock();
+   327→    } else if (confirmKind === "clear") {
+   328→      await clearChat();
+   329→    } else {
+   330→      await deleteChat();
+   331→    }
+   332→    setConfirmKind(null);
+   333→  };
+   334→
+   335→  // ---------- Bagian "Bisukan notifikasi" ----------
+   336→  // Pilihan bisukan dipisah agar bisa tampil sebagai sub-menu melayang
+   337→  // (desktop) ATAU bagian inline yang bisa dibuka (mobile/tablet).
+   338→  const muteOptions = (
+   339→    <>
+   340→      {chat?.muted && (
+   341→        <DropdownMenuItem onSelect={() => patchChat({ muted: false }, "Notifikasi dinyalakan")} className="gap-2">
+   342→          <BellRing className="h-4 w-4 text-muted-foreground" /> Bunyikan notifikasi
+   343→        </DropdownMenuItem>
+   344→      )}
+   345→      <DropdownMenuItem onSelect={() => (chat ? patchChat({ muted: true }, "Notifikasi dibisukan (8 jam)") : needChat())}>
+   346→        8 jam
+   347→      </DropdownMenuItem>
+   348→      <DropdownMenuItem onSelect={() => (chat ? patchChat({ muted: true }, "Notifikasi dibisukan (1 minggu)") : needChat())}>
+   349→        1 minggu
+   350→      </DropdownMenuItem>
+   351→      <DropdownMenuItem onSelect={() => (chat ? patchChat({ muted: true }, "Notifikasi dibisukan (selalu)") : needChat())}>
+   352→        Selalu
+   353→      </DropdownMenuItem>
+   354→    </>
+   355→  );
+   356→
+   357→  const muteSection = inlineSubs ? (
+   358→    <>
+   359→      <DropdownMenuItem
+   360→        onSelect={(e) => {
+   361→          e.preventDefault();
+   362→          setMuteOpen((v) => !v);
+   363→        }}
+   364→        aria-expanded={muteOpen}
+   365→        className="gap-2.5"
+   366→      >
+   367→        <BellOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   368→        Bisukan notifikasi
+   369→        <ChevronRight
+   370→          className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", muteOpen && "rotate-90")}
+   371→          aria-hidden="true"
+   372→        />
+   373→      </DropdownMenuItem>
+   374→      {muteOpen && <div className="pl-6">{muteOptions}</div>}
+   375→    </>
+   376→  ) : (
+   377→    <DropdownMenuSub>
+   378→      <DropdownMenuSubTrigger className="gap-2.5">
+   379→        <BellOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   380→        Bisukan notifikasi
+   381→      </DropdownMenuSubTrigger>
+   382→      <DropdownMenuSubContent className="w-48">{muteOptions}</DropdownMenuSubContent>
+   383→    </DropdownMenuSub>
+   384→  );
+   385→
+   386→  const menuItems = (
+   387→    <>
+   388→          <DropdownMenuItem onSelect={() => (chat ? setTimeout(() => setInfoOpen(true), 0) : needChat())} className="gap-2.5">
+   389→            <CircleUserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   390→            Info kontak
+   391→          </DropdownMenuItem>
+   392→          <DropdownMenuItem onSelect={focusSearch} className="gap-2.5">
+   393→            <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   394→            Cari
+   395→          </DropdownMenuItem>
+   396→          <DropdownMenuItem
+   397→            onSelect={() => {
+   398→              if (!chat) return needChat();
+   399→              onGoToChats();
+   400→              toast({ title: "Pilih pesan", description: "Arahkan kursor ke pesan lalu klik ikon hapus untuk memilihnya." });
+   401→            }}
+   402→            className="gap-2.5"
+   403→          >
+   404→            <SquareCheckBig className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   405→            Pilih pesan
+   406→          </DropdownMenuItem>
+   407→
+   408→          {muteSection}
+   409→
+   410→          <DropdownMenuItem
+   411→            onSelect={() => {
+   412→              if (!chat) return needChat();
+   413→              setEphValue(readEphemeral(chat.id));
+   414→              setTimeout(() => setEphOpen(true), 0);
+   415→            }}
+   416→            className="gap-2.5"
+   417→          >
+   418→            <Timer className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   419→            Pesan sementara
+   420→          </DropdownMenuItem>
+   421→          <DropdownMenuItem
+   422→            onSelect={() => {
+   423→              setWallpaper(localStorage.getItem(WALLPAPER_KEY) ?? "");
+   424→              setTimeout(() => setThemeOpen(true), 0);
+   425→            }}
+   426→            className="gap-2.5"
+   427→          >
+   428→            <Palette className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   429→            Tema obrolan
+   430→          </DropdownMenuItem>
+   431→          <DropdownMenuItem onSelect={toggleFavorite} className="gap-2.5">
+   432→            <Heart className={cn("h-4 w-4", isFav ? "fill-red-500 text-red-500" : "text-muted-foreground")} aria-hidden="true" />
+   433→            {isFav ? "Hapus dari favorit" : "Tambah ke favorit"}
+   434→          </DropdownMenuItem>
+   435→          <DropdownMenuItem
+   436→            onSelect={() => (chat ? patchChat({ pinned: !chat.pinned }, chat.pinned ? "Lepas dari daftar" : "Ditambat ke daftar") : needChat())}
+   437→            className="gap-2.5"
+   438→          >
+   439→            <Pin className={cn("h-4 w-4", chat?.pinned ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
+   440→            {chat?.pinned ? "Lepas dari daftar" : "Tambat ke daftar"}
+   441→          </DropdownMenuItem>
+   442→          <DropdownMenuItem onSelect={exportChat} className="gap-2.5">
+   443→            <Download className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   444→            Ekspor obrolan
+   445→          </DropdownMenuItem>
+   446→          <DropdownMenuItem onSelect={closeChat} className="gap-2.5">
+   447→            <XCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   448→            Tutup obrolan
+   449→          </DropdownMenuItem>
+   450→
+   451→          <DropdownMenuSeparator />
+   452→
+   453→          <DropdownMenuItem onSelect={() => (chat ? setTimeout(() => setConfirmKind("report"), 0) : needChat())} className="gap-2.5">
+   454→            <Flag className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   455→            Laporkan
+   456→          </DropdownMenuItem>
+   457→          <DropdownMenuItem
+   458→            onSelect={() => {
+   459→              if (!chat) return needChat();
+   460→              if (isGroup) {
+   461→                toast({ title: "Blokir hanya untuk chat pribadi" });
+   462→                return;
+   463→              }
+   464→              setTimeout(() => setConfirmKind("block"), 0);
+   465→            }}
+   466→            className="gap-2.5"
+   467→          >
+   468→            <CircleSlash className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   469→            {chat?.contact?.blocked ? "Buka blokir" : "Blokir"}
+   470→          </DropdownMenuItem>
+   471→          <DropdownMenuItem onSelect={() => (chat ? setTimeout(() => setConfirmKind("clear"), 0) : needChat())} className="gap-2.5">
+   472→            <Eraser className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   473→            Bersihkan obrolan
+   474→          </DropdownMenuItem>
+   475→          <DropdownMenuItem
+   476→            onSelect={() => (chat ? setTimeout(() => setConfirmKind("delete"), 0) : needChat())}
+   477→            className="gap-2.5 text-red-600 focus:text-red-600"
+   478→          >
+   479→            <Trash2 className="h-4 w-4" aria-hidden="true" />
+   480→            Hapus obrolan
+   481→          </DropdownMenuItem>
+   482→    </>
+   483→  );
+   484→
+   485→  const dialogs = (
+   486→    <>
+   487→      {/* Dialog: Info kontak */}
+   488→      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+   489→        <DialogContent className="max-w-sm">
+   490→          <DialogHeader>
+   491→            <DialogTitle>{isGroup ? "Info grup" : "Info kontak"}</DialogTitle>
+   492→            <DialogDescription>Data obrolan yang sedang aktif.</DialogDescription>
+   493→          </DialogHeader>
+   494→          {chat && (
+   495→            <div className="flex flex-col items-center gap-3 py-2 text-center">
+   496→              <ChatAvatar name={chat.name} colorKey={chat.colorKey} avatarUrl={chat.avatarUrl} className="h-20 w-20 text-xl" />
+   497→              <div>
+   498→                <p className="text-lg font-bold leading-tight">{chat.name}</p>
+   499→                {chat.isBusinessChat && (
+   500→                  <span className="mt-1 inline-block rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+   501→                    Bisnis
+   502→                  </span>
+   503→                )}
+   504→              </div>
+   505→              {isGroup ? (
+   506→                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+   507→                  <Users className="h-4 w-4" aria-hidden="true" />
+   508→                  {memberCount} anggota
+   509→                </p>
+   510→              ) : (
+   511→                <div className="w-full space-y-1.5 rounded-lg bg-secondary/60 p-3 text-left text-sm">
+   512→                  <p className="flex justify-between gap-3">
+   513→                    <span className="text-muted-foreground">Nomor</span>
+   514→                    <span className="font-medium">{chat.contact?.phone ?? "—"}</span>
+   515→                  </p>
+   516→                  <p className="flex justify-between gap-3">
+   517→                    <span className="text-muted-foreground">Tentang</span>
+   518→                    <span className="max-w-[60%] truncate font-medium">{chat.contact?.about || "—"}</span>
+   519→                  </p>
+   520→                  <p className="flex justify-between gap-3">
+   521→                    <span className="text-muted-foreground">Status</span>
+   522→                    <span className={cn("font-medium", chat.contact?.blocked && "text-red-600")}>
+   523→                      {chat.contact?.blocked ? "Diblokir" : "Aktif"}
+   524→                    </span>
+   525→                  </p>
+   526→                </div>
+   527→              )}
+   528→              {!isGroup && chat.contact && (
+   529→                <p className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+   530→                  {getInitials(chat.contact.name)}
+   531→                </p>
+   532→              )}
+   533→            </div>
+   534→          )}
+   535→        </DialogContent>
+   536→      </Dialog>
+   537→
+   538→      {/* Dialog: Pesan sementara */}
+   539→      <Dialog open={ephOpen} onOpenChange={setEphOpen}>
+   540→        <DialogContent className="max-w-sm">
+   541→          <DialogHeader>
+   542→            <DialogTitle>Pesan sementara</DialogTitle>
+   543→            <DialogDescription>
+   544→              Aktifkan timer agar pesan baru di obrolan ini terhapus otomatis setelah jangka waktu tertentu.
+   545→            </DialogDescription>
+   546→          </DialogHeader>
+   547→          <RadioGroup value={ephValue} onValueChange={setEphValue} className="gap-2">
+   548→            {EPHEMERAL_OPTIONS.map((opt) => (
+   549→              <Label
+   550→                key={opt.id}
+   551→                htmlFor={`eph-${opt.id}`}
+   552→                className="flex cursor-pointer items-center gap-3 rounded-lg border border-border p-3 text-sm font-normal hover:bg-secondary/60"
+   553→              >
+   554→                <RadioGroupItem value={opt.id} id={`eph-${opt.id}`} />
+   555→                {opt.label}
+   556→              </Label>
+   557→            ))}
+   558→          </RadioGroup>
+   559→          <DialogFooter>
+   560→            <Button variant="outline" onClick={() => setEphOpen(false)}>
+   561→              Batal
+   562→            </Button>
+   563→            <Button onClick={saveEphemeral}>Simpan</Button>
+   564→          </DialogFooter>
+   565→        </DialogContent>
+   566→      </Dialog>
+   567→
+   568→      {/* Dialog: Tema obrolan */}
+   569→      <Dialog open={themeOpen} onOpenChange={setThemeOpen}>
+   570→        <DialogContent className="max-w-sm">
+   571→          <DialogHeader>
+   572→            <DialogTitle>Tema obrolan</DialogTitle>
+   573→            <DialogDescription>Pilih warna latar area percakapan.</DialogDescription>
+   574→          </DialogHeader>
+   575→          <div className="grid grid-cols-3 gap-2">
+   576→            {WALLPAPERS.map((w) => (
+   577→              <button
+   578→                key={w.id}
+   579→                type="button"
+   580→                onClick={() => applyWallpaper(w.id)}
+   581→                aria-label={`Tema ${w.label}`}
+   582→                aria-pressed={wallpaper === w.id}
+   583→                className={cn(
+   584→                  "flex h-20 flex-col items-center justify-end gap-1 rounded-xl border-2 p-1.5 text-[10px] font-medium transition-all",
+   585→                  wallpaper === w.id ? "border-primary ring-2 ring-primary/25" : "border-border hover:border-primary/40"
+   586→                )}
+   587→                style={{ backgroundColor: w.color || undefined }}
+   588→              >
+   589→                {!w.color && <span className="wa-chat-bg h-full w-full rounded-lg" aria-hidden="true" />}
+   590→                <span className={cn("rounded bg-black/5 px-1", w.color === "#1f2a24" && "bg-white/20 text-white")}>{w.label}</span>
+   591→              </button>
+   592→            ))}
+   593→          </div>
+   594→          <DialogFooter>
+   595→            <Button onClick={() => setThemeOpen(false)}>Selesai</Button>
+   596→          </DialogFooter>
+   597→        </DialogContent>
+   598→      </Dialog>
+   599→
+   600→      {/* Dialog konfirmasi: Laporkan / Blokir / Bersihkan / Hapus */}
+   601→      <AlertDialog open={confirmKind !== null} onOpenChange={(open) => !open && setConfirmKind(null)}>
+   602→        <AlertDialogContent>
+   603→          <AlertDialogHeader>
+   604→            <AlertDialogTitle>{confirmKind ? confirmCopy[confirmKind].title : ""}</AlertDialogTitle>
+   605→            <AlertDialogDescription>{confirmKind ? confirmCopy[confirmKind].desc : ""}</AlertDialogDescription>
+   606→          </AlertDialogHeader>
+   607→          <AlertDialogFooter>
+   608→            <AlertDialogCancel disabled={busy}>Batal</AlertDialogCancel>
+   609→            <AlertDialogAction
+   610→              disabled={busy}
+   611→              onClick={(e) => {
+   612→                e.preventDefault();
+   613→                void runConfirm();
+   614→              }}
+   615→              className={cn(
+   616→                confirmKind === "delete" || confirmKind === "clear"
+   617→                  ? "bg-destructive text-white hover:bg-destructive/90"
+   618→                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+   619→              )}
+   620→            >
+   621→              {confirmKind ? confirmCopy[confirmKind].action : "OK"}
+   622→            </AlertDialogAction>
+   623→          </AlertDialogFooter>
+   624→        </AlertDialogContent>
+   625→      </AlertDialog>
+   626→    </>
+   627→  );
+   628→
+   629→  return { menuItems, dialogs, resetInline: () => setMuteOpen(false) };
+   630→}
+   631→
+   632→/**
+   633→ * Menu titik-tiga obrolan MANDIRI (trigger + isi + dialog).
+   634→ * Dipasang di tepi panel daftar chat pada desktop (≥lg) — Gambar 1.
+   635→ * Desktop selalu memakai sub-menu melayang (ruang layar cukup).
+   636→ */
+   637→export default function ObrolanMenu({ onGoToChats }: { onGoToChats: () => void }) {
+   638→  const { menuItems, dialogs } = useObrolanMenu(onGoToChats);
+   639→
+   640→  return (
+   641→    <>
+   642→      <DropdownMenu>
+   643→        <DropdownMenuTrigger asChild>
+   644→          <Button variant="ghost" size="icon" aria-label="Menu obrolan" className="h-9 w-9 shrink-0">
+   645→            <MoreVertical className="h-5 w-5" />
+   646→          </Button>
+   647→        </DropdownMenuTrigger>
+   648→        <DropdownMenuContent align="start" sideOffset={6} className="w-64 max-h-[75vh] overflow-y-auto wa-scrollbar">
+   649→          {menuItems}
+   650→        </DropdownMenuContent>
+   651→      </DropdownMenu>
+   652→      {dialogs}
+   653→    </>
+   654→  );
+   655→}
+   656→
